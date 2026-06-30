@@ -488,7 +488,7 @@ let suppressNextSnapshot = false; // verhindert Echo nach eigenem Schreiben
 function dflt(){
   return {
     meta:{ name:'', createdAt:0 },
-    phase:'setup', adminPin:'1910', adminUnlocked:false, tiebreaker:'direkt',
+    phase:'setup', adminPin:'1910', tiebreaker:'direkt',
     matchDurationMin:20, courts:1,
     groups:[], teamPins:{}, rosters:{}, groupMatches:{}, koRounds:[]
   };
@@ -496,6 +496,11 @@ function dflt(){
 let S = dflt();
 const ATK = 'schuemmelcup_active_team'; // localStorage: eingeloggtes Team (pro Browser/Gerät)
 let activeTeam = localStorage.getItem(ATK) || null;
+
+// WICHTIG: Admin-Status ist bewusst NICHT Teil von S (gemeinsamer Firebase-State),
+// sondern rein lokal pro Gerät/Browser-Tab. Sonst würde ein Admin-Login auf einem
+// Gerät automatisch alle anderen Geräte ebenfalls als "Admin entsperrt" zeigen.
+let localAdminUnlocked = false;
 
 function newTournamentId(){
   return 'tk_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
@@ -524,6 +529,7 @@ function connectToTournament(id, isNew=false, initialState=null){
     if(!S.meta) S.meta={name:'',createdAt:0};
     if(S.matchDurationMin===undefined) S.matchDurationMin=20;
     if(S.courts===undefined) S.courts=1;
+    if('adminUnlocked' in S) delete S.adminUnlocked; // Altlast aus früherer Version entfernen
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
     updateTournamentNameDisplay();
@@ -1023,18 +1029,18 @@ function removeEvent(matchId, eventId){
 // ═══════════════════════════════════════════════════════════════
 function mcHTML(m, saveFn, showQRBtn=false){
   const played = m.h!==''&&m.a!=='';
-  const locked = m.locked && !S.adminUnlocked;
+  const locked = m.locked && !localAdminUnlocked;
   const isMyMatch = activeTeam && (m.home===activeTeam||m.away===activeTeam);
-  const canEdit  = (S.adminUnlocked || (isMyMatch && !locked));
+  const canEdit  = (localAdminUnlocked || (isMyMatch && !locked));
   const homeHl = activeTeam&&m.home===activeTeam?' hl':'';
   const awayHl = activeTeam&&m.away===activeTeam?' hl':'';
   const cardCls = ['mc',played?'played':'',m.locked?'locked':'',isMyMatch&&!played?'mine':''].filter(Boolean).join(' ');
   const qrBtn = ''; // QR jetzt zentral im Admin-Bereich, nicht mehr pro Spiel
-  const unlockBtn = S.adminUnlocked&&m.locked ? `<button class="btn-unlock-m" onclick="unlockMatch('${m.id}')">🔓 Freigeben</button>` : '';
+  const unlockBtn = localAdminUnlocked&&m.locked ? `<button class="btn-unlock-m" onclick="unlockMatch('${m.id}')">🔓 Freigeben</button>` : '';
   const editBtn = canEdit ? `<button class="btn-eintrag" onclick="toggleEF('${m.id}')">Ergebnis eintragen</button>` : '';
 
   // Events are editable whenever the match can still be edited OR admin (even if locked, admin can add/remove)
-  const eventsEditable = S.adminUnlocked || (isMyMatch && !locked);
+  const eventsEditable = localAdminUnlocked || (isMyMatch && !locked);
   const evList = eventsListHTML(m, eventsEditable);
   const evAddBox = eventsEditable ? addEventBoxHTML(m) : '';
 
@@ -1071,7 +1077,7 @@ function mcHTML(m, saveFn, showQRBtn=false){
     ${evList}
     ${efHTML}
     ${showEventsBlock && !efHTML.includes('open') ? '' : ''}
-    ${eventsEditable ? `<div id="evbox-${m.id}" style="${played||m.locked||S.adminUnlocked?'':'display:none;'}">${evAddBox}</div>` : ''}
+    ${eventsEditable ? `<div id="evbox-${m.id}" style="${played||m.locked||localAdminUnlocked?'':'display:none;'}">${evAddBox}</div>` : ''}
   </div>`;
 }
 
@@ -1089,7 +1095,7 @@ function doSave(id, pool, afterFn){
   if(h===''||a===''){ em.textContent='Bitte beide Tore eingeben.'; em.style.display='block'; return; }
   const m=pool.find(x=>x.id===id);
   if(!m) return;
-  if(!S.adminUnlocked){
+  if(!localAdminUnlocked){
     if(!activeTeam){ em.textContent='Bitte zuerst als Team einloggen.'; em.style.display='block'; return; }
     if(m.home!==activeTeam&&m.away!==activeTeam){ em.textContent='Du kannst nur Spiele deines Teams eintragen.'; em.style.display='block'; return; }
   }
@@ -1333,7 +1339,7 @@ function renderOv(){
   if(champ&&champ!=='?'){document.getElementById('champ-banner').style.display='block';document.getElementById('champ-name').textContent=champ;}
   else document.getElementById('champ-banner').style.display='none';
   document.getElementById('ov-tables').innerHTML=S.groups.map((g,gi)=>`<div class="card">${tblHTML(g.teams,S.groupMatches[gi]||[],g.name)}</div>`).join('');
-  document.getElementById('ov-ko-btn').style.display=(S.phase==='group'&&S.adminUnlocked)?'block':'none';
+  document.getElementById('ov-ko-btn').style.display=(S.phase==='group'&&localAdminUnlocked)?'block':'none';
 }
 
 function renderGrp(){
@@ -1396,7 +1402,7 @@ function initEventDropdowns(){
 
 function renderAdm(){
   const lc=document.getElementById('adm-lock'),ac=document.getElementById('adm-content');
-  if(!S.adminUnlocked){lc.style.display='block';ac.style.display='none';return;}
+  if(!localAdminUnlocked){lc.style.display='block';ac.style.display='none';return;}
   lc.style.display='none';ac.style.display='block';
   document.getElementById('btn-build-ko').style.display=S.phase==='group'?'inline-block':'none';
 
@@ -1431,10 +1437,10 @@ function renderAdm(){
 // ═══════════════════════════════════════════════════════════════
 function unlockAdmin(){
   if(document.getElementById('adm-pin-inp').value===S.adminPin){
-    S.adminUnlocked=true;save();document.getElementById('adm-err').style.display='none';renderAdm();renderOv();
+    localAdminUnlocked=true;document.getElementById('adm-err').style.display='none';renderAdm();renderOv();
   } else document.getElementById('adm-err').style.display='block';
 }
-function lockAdmin(){ S.adminUnlocked=false;save();renderAdm();renderOv(); }
+function lockAdmin(){ localAdminUnlocked=false;renderAdm();renderOv(); }
 function resetAll(){
   if(!confirm('Turnier wirklich zurücksetzen? Alle Daten (Teams, Ergebnisse, Kader) werden unwiderruflich gelöscht.'))return;
   if(!confirm('Bist du WIRKLICH sicher? Dies kann nicht rückgängig gemacht werden.'))return;
