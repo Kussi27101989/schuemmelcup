@@ -375,7 +375,6 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <button data-view="groups">Gruppen</button>
       <button data-view="knockout">KO-Runde</button>
       <button data-view="schedule">Spielplan</button>
-      <button data-view="tree">Turnierbaum</button>
       <button data-view="stats">Torschützen</button>
       <button data-view="admin">⚙ Admin</button>
     </nav>
@@ -434,9 +433,54 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">
         <button onclick="addGroup()" style="background:var(--bg);border:1px solid var(--border);padding:6px 14px;border-radius:5px;font-size:13px;font-weight:600;">+ Gruppe</button>
         <button onclick="removeLastGroup()" style="background:var(--bg);border:1px solid var(--border);padding:6px 14px;border-radius:5px;font-size:13px;color:var(--red);">− Letzte Gruppe</button>
-        <button onclick="startFromEditor()" style="background:var(--blue);color:#fff;border:none;padding:8px 18px;border-radius:6px;font-weight:700;font-size:13px;">Turnier starten</button>
       </div>
     </div>
+
+    <div class="card" style="border-left:4px solid var(--blue);">
+      <div style="font-weight:700;color:var(--blue);margin-bottom:14px;">🕐 Zeitplan festlegen</div>
+
+      <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:6px;">Erste Anstoßzeit</div>
+      <input type="time" id="sched-first-time" value="10:00" style="padding:8px 12px;border-radius:6px;border:1px solid var(--border);font-size:15px;margin-bottom:16px;">
+
+      <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">Spieldauer</div>
+      <div class="opt-grp" id="sched-halves-opts">
+        <button class="opt-btn sel" data-val="1" onclick="selOpt(this,'sched-halves-opts')">1 Halbzeit</button>
+        <button class="opt-btn" data-val="2" onclick="selOpt(this,'sched-halves-opts')">2 Halbzeiten</button>
+      </div>
+      <div class="form-row" style="margin-top:10px;">
+        <label>Dauer je Halbzeit:</label>
+        <input type="number" id="sched-half-len" value="10" min="1" max="60" oninput="updateSchedDurationHint()" style="width:70px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);"> Min.
+        <label style="margin-left:10px;">Pause zwischen Halbzeiten:</label>
+        <input type="number" id="sched-break-len" value="5" min="0" max="30" oninput="updateSchedDurationHint()" style="width:70px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);"> Min.
+      </div>
+      <div class="form-row" style="margin-top:6px;">
+        <label>Pause zwischen zwei Spielen (Feldwechsel etc.):</label>
+        <input type="number" id="sched-gap-len" value="5" min="0" max="30" oninput="updateSchedDurationHint()" style="width:70px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);"> Min.
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-bottom:16px;" id="sched-duration-hint"></div>
+
+      <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">Parallele Spiele (gleichzeitig auf verschiedenen Feldern)</div>
+      <div class="form-row">
+        <label>Gruppenphase:</label>
+        <select id="sched-fields-group">
+          <option value="1">1 Spiel gleichzeitig</option>
+          <option value="2" selected>2 Spiele gleichzeitig</option>
+          <option value="3">3 Spiele gleichzeitig</option>
+          <option value="4">4 Spiele gleichzeitig</option>
+        </select>
+      </div>
+      <div class="form-row">
+        <label>KO-Runde:</label>
+        <select id="sched-fields-ko">
+          <option value="1" selected>1 Spiel gleichzeitig</option>
+          <option value="2">2 Spiele gleichzeitig</option>
+          <option value="3">3 Spiele gleichzeitig</option>
+        </select>
+      </div>
+      <div style="font-size:11px;color:var(--muted);">Anstoßzeiten werden beim Start automatisch berechnet und können danach pro Spiel im Spielplan noch manuell angepasst werden.</div>
+    </div>
+
+    <button onclick="startFromEditor()" style="background:var(--blue);color:#fff;border:none;padding:10px 22px;border-radius:7px;font-weight:700;font-size:14px;margin-bottom:20px;">⚽ Turnier mit diesem Zeitplan starten</button>
   </div>
   <div id="grp-content"><div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div></div>
 </div>
@@ -448,13 +492,10 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 
 <div class="view" id="view-schedule">
   <div class="sec-title">Spielplan</div>
-  <div id="sch-content"><div class="card"><p style="color:var(--muted);">Noch keine Spiele.</p></div></div>
-</div>
-
-<div class="view" id="view-tree">
-  <div class="sec-title">Turnierbaum</div>
-  <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Vollständige Übersicht: Gruppenphase und KO-Runde mit allen Teams und Anstoßzeiten.</p>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Gesamtübersicht mit allen Teams, Feldern und Anstoßzeiten — Gruppenphase und KO-Runde.</p>
   <div id="tree-content"><div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div></div>
+  <div class="sub-lbl" id="sch-editable-lbl" style="display:none;margin-top:24px;">Ergebnisse eintragen</div>
+  <div id="sch-content"></div>
 </div>
 
 <div class="view" id="view-stats">
@@ -522,7 +563,7 @@ function dflt(){
   return {
     meta:{ name:'', createdAt:0 },
     phase:'setup', adminPin:'1910', tiebreaker:'direkt',
-    matchDurationMin:20, courts:1,
+    schedule: null, // { firstTime, halves, halfLen, breakLen, matchDuration, fieldsGroup, fieldsKO }
     groups:[], teamPins:{}, rosters:{}, groupMatches:{}, koRounds:[]
   };
 }
@@ -560,8 +601,7 @@ function connectToTournament(id, isNew=false, initialState=null){
     S = data;
     if(!S.rosters) S.rosters={};
     if(!S.meta) S.meta={name:'',createdAt:0};
-    if(S.matchDurationMin===undefined) S.matchDurationMin=20;
-    if(S.courts===undefined) S.courts=1;
+    if(S.schedule===undefined) S.schedule=null;
     if('adminUnlocked' in S) delete S.adminUnlocked; // Altlast aus früherer Version entfernen
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
@@ -780,7 +820,7 @@ function showView(v){
   document.querySelectorAll('#main-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   render(v);
 }
-function render(v){ ({overview:renderOv,groups:renderGrp,knockout:renderKO,schedule:renderSch,tree:renderTree,stats:renderStats,admin:renderAdm})[v]?.(); }
+function render(v){ ({overview:renderOv,groups:renderGrp,knockout:renderKO,schedule:renderSch,stats:renderStats,admin:renderAdm})[v]?.(); }
 function renderAll(){ render(curView); }
 
 // ═══════════════════════════════════════════════════════════════
@@ -792,6 +832,17 @@ function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').rep
 function selOpt(btn,gid){
   document.querySelectorAll('#'+gid+' .opt-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel');
   if(gid==='tb-opts'){ const h=document.getElementById('tb-hint'); h.textContent=btn.dataset.val==='direkt'?'Punkte → Direkter Vergleich → Tordifferenz → Tore':'Punkte → Tordifferenz → Tore → Direkter Vergleich'; }
+  if(gid==='sched-halves-opts'){ updateSchedDurationHint(); }
+}
+function updateSchedDurationHint(){
+  const halves = +(document.querySelector('#sched-halves-opts .opt-btn.sel')?.dataset.val || 1);
+  const halfLen = +document.getElementById('sched-half-len').value || 0;
+  const breakLen = +document.getElementById('sched-break-len').value || 0;
+  const gapLen = +document.getElementById('sched-gap-len').value || 0;
+  const pureMatch = halves===2 ? (halfLen*2 + breakLen) : halfLen;
+  const slotTotal = pureMatch + gapLen;
+  const el = document.getElementById('sched-duration-hint');
+  if(el) el.textContent = `Reine Spielzeit: ${pureMatch} Min.` + (halves===2?` (${halfLen}+${breakLen}+${halfLen})`:'') + ` · Mit Pause zum nächsten Spiel: ${slotTotal} Min. pro Zeitslot`;
 }
 function allTeams(){ return S.groups.flatMap(g=>g.teams); }
 function roster(team){ return S.rosters[team] || []; }
@@ -1102,7 +1153,7 @@ function mcHTML(m, saveFn, showQRBtn=false){
       <div class="mc-team away${awayHl}">${esc(m.away)}</div>
     </div>
     <div class="mc-meta">
-      ${m.time?'🕐 '+m.time:''}
+      ${m.time?'🕐 '+m.time:''}${m.field?' · Feld '+m.field:''}
       ${m.locked?'<span class="lock-badge">🔒 Gesperrt</span>':''}
       <span class="okmsg" id="ok-${m.id}">✓ Gespeichert & gesperrt</span>
       <div class="mc-actions">${qrBtn}${unlockBtn}${editBtn}</div>
@@ -1200,6 +1251,7 @@ function renderGE(){
     h+=`<div class="ge-add"><input type="text" id="nt-${gi}" placeholder="Team hinzufügen..." onkeydown="if(event.key==='Enter')addT(${gi})"><button class="btn-add" onclick="addT(${gi})">+</button></div></div>`;
   });
   document.getElementById('ge-editors').innerHTML=h;
+  setTimeout(updateSchedDurationHint, 0);
 }
 function mvTeam(fi,ti,to){ S.groups[to].teams.push(S.groups[fi].teams.splice(ti,1)[0]); save();renderGE(); }
 function rmTeam(gi,ti){ const t=S.groups[gi].teams.splice(ti,1)[0]; delete S.teamPins[t]; delete S.rosters[t]; save();renderGE(); }
@@ -1220,9 +1272,44 @@ function startFromEditor(){
   const teams=allTeams(); if(teams.length<2){alert('Mindestens 2 Teams.');return;}
   S.groups=S.groups.filter(g=>g.teams.length>0);
   const gm={}; S.groups.forEach((g,gi)=>gm[gi]=genMatches(g.teams));
-  S.groupMatches=gm; S.phase='group'; save();
+  S.groupMatches=gm;
+
+  // Zeitplan-Einstellungen übernehmen
+  const firstTime = document.getElementById('sched-first-time').value || '10:00';
+  const halves = +(document.querySelector('#sched-halves-opts .opt-btn.sel')?.dataset.val || 1);
+  const halfLen = +document.getElementById('sched-half-len').value || 10;
+  const breakLen = +document.getElementById('sched-break-len').value || 0;
+  const gapLen = +document.getElementById('sched-gap-len').value || 0;
+  const fieldsGroup = +document.getElementById('sched-fields-group').value || 1;
+  const fieldsKO = +document.getElementById('sched-fields-ko').value || 1;
+  const pureMatch = halves===2 ? (halfLen*2 + breakLen) : halfLen;
+  const matchDuration = pureMatch + gapLen; // Zeitslot-Länge inkl. Pause bis zum nächsten Spiel auf demselben Feld
+
+  S.schedule = { firstTime, halves, halfLen, breakLen, gapLen, pureMatch, matchDuration, fieldsGroup, fieldsKO };
+
+  // Alle Gruppenspiele automatisch verteilen (chronologisch über Felder hinweg)
+  const allGroupMatches = [];
+  S.groups.forEach((g,gi)=>gm[gi].forEach(m=>allGroupMatches.push(m)));
+  scheduleMatchList(allGroupMatches, firstTime, matchDuration, fieldsGroup);
+
+  S.phase='group'; save();
   document.getElementById('ge-section').style.display='none';
   renderGrp(); renderOv();
+}
+
+// Verteilt eine Liste von Spielen auf N parallele Felder, beginnend bei startTime,
+// mit fester Dauer pro Spiel (matchDuration in Minuten). Setzt m.time und m.field.
+function scheduleMatchList(matches, startTime, matchDuration, numFields){
+  const [sh,sm] = startTime.split(':').map(Number);
+  let startMinutes = sh*60+sm;
+  matches.forEach((m, idx) => {
+    const slot = Math.floor(idx / numFields);      // Zeit-Slot (Runde)
+    const field = (idx % numFields) + 1;            // Feld-Nummer 1..N
+    const t = startMinutes + slot*matchDuration;
+    const hh = Math.floor(t/60)%24, mm = t%60;
+    m.time = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    m.field = field;
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1284,7 +1371,33 @@ function buildKO(){
     if(w) seeded.push(w);
     if(r) seeded.push(r);
   }
-  S.koRounds=mkBracket(seeded); S.phase='knockout'; save(); renderAll(); showView('knockout');
+  S.koRounds=mkBracket(seeded);
+
+  // KO-Zeitplan: automatisch ab Ende der Gruppenphase, jede Runde nacheinander
+  const sched = S.schedule;
+  if(sched){
+    const allGM = Object.values(S.groupMatches).flat();
+    const lastGroupEnd = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+    let nextStart = lastGroupEnd;
+    S.koRounds.forEach(round=>{
+      const playable = round.matches.filter(m=>!m.isFrei);
+      scheduleMatchList(playable, nextStart, sched.matchDuration, sched.fieldsKO);
+      nextStart = latestMatchEnd(playable, sched.matchDuration, sched.fieldsKO, nextStart);
+    });
+  }
+
+  S.phase='knockout'; save(); renderAll(); showView('knockout');
+}
+
+// Berechnet die Uhrzeit, zu der das letzte Spiel einer Liste (verteilt auf numFields) endet.
+function latestMatchEnd(matches, matchDuration, numFields, startTime){
+  if(!matches.length) return startTime;
+  const [sh,sm] = startTime.split(':').map(Number);
+  const startMinutes = sh*60+sm;
+  const lastSlot = Math.floor((matches.length-1) / numFields);
+  const endMinutes = startMinutes + (lastSlot+1)*matchDuration;
+  const hh = Math.floor(endMinutes/60)%24, mm = endMinutes%60;
+  return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
 }
 function mkBracket(q){
   const n=q.length, sz=Math.pow(2,Math.ceil(Math.log2(n)));
@@ -1427,12 +1540,45 @@ function renderTree(){
 
   let html = '<div class="card">';
 
+  // ── CHRONOLOGISCHER ZEITPLAN (nach Feldern) ──
+  if(S.schedule){
+    const allMatches = [
+      ...Object.values(S.groupMatches).flat().map(m=>({...m, phase:'Gruppe'})),
+      ...S.koRounds.flatMap(r=>r.matches.filter(m=>!m.isFrei).map(m=>({...m, phase:r.name})))
+    ].filter(m=>m.time);
+    const byTime = {};
+    allMatches.forEach(m=>{ (byTime[m.time]=byTime[m.time]||[]).push(m); });
+    const times = Object.keys(byTime).sort();
+    if(times.length){
+      html += '<div class="tree-phase-lbl">Zeitplan (chronologisch, nach Feld)</div>';
+      html += '<table style="margin-bottom:8px;"><thead><tr><th>Zeit</th>';
+      const maxFields = Math.max(...allMatches.map(m=>m.field||1));
+      for(let f=1; f<=maxFields; f++) html += `<th>Feld ${f}</th>`;
+      html += '</tr></thead><tbody>';
+      times.forEach(t=>{
+        html += `<tr><td style="font-weight:700;">${t}</td>`;
+        for(let f=1; f<=maxFields; f++){
+          const m = byTime[t].find(x=>(x.field||1)===f);
+          if(m){
+            const played = m.h!==''&&m.a!=='';
+            html += `<td style="text-align:left;font-size:12px;">${esc(m.home)} – ${esc(m.away)}${played?` <strong>(${m.h}:${m.a})</strong>`:''}<br><span style="color:var(--muted);font-size:10px;">${esc(m.phase)}</span></td>`;
+          } else html += '<td></td>';
+        }
+        html += '</tr>';
+      });
+      html += '</tbody></table>';
+    }
+  }
+
   // ── GRUPPENPHASE ──
   html += '<div class="tree-phase-lbl">Gruppenphase</div>';
   html += '<div class="tree-groups-row">';
   S.groups.forEach((g,gi)=>{
     html += `<div class="tree-group-card"><div class="tgc-title">Gruppe ${esc(g.name)}</div>`;
-    const matches = (S.groupMatches[gi]||[]).slice().sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+    const matches = (S.groupMatches[gi]||[]).slice().sort((a,b)=>{
+      const t = (a.time||'99:99').localeCompare(b.time||'99:99');
+      return t!==0 ? t : (a.field||0)-(b.field||0);
+    });
     if(!matches.length){
       html += '<div style="font-size:12px;color:var(--muted);">Keine Spiele</div>';
     } else {
@@ -1444,7 +1590,7 @@ function renderTree(){
           <span class="tml-team${homeWin?' win':''}">${esc(m.home)}</span>
           <span class="tml-score">${played?m.h+':'+m.a:'–:–'}</span>
           <span class="tml-team${awayWin?' win':''}" style="text-align:right;">${esc(m.away)}</span>
-          <span class="tml-time">${m.time||''}</span>
+          <span class="tml-time">${m.time||''}${m.field?' · F'+m.field:''}</span>
         </div>`;
       });
     }
@@ -1480,7 +1626,7 @@ function renderTree(){
             <span class="tkm-team${awayWin?' win':''}${awayIsPlaceholder?' placeholder':''}">${esc(m.away)}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span>
             ${played?`<span class="tkm-score">${m.a}</span>`:''}
           </div>
-          ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}</div>`:''}
+          ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}${m.field?' · Feld '+m.field:''}</div>`:''}
         </div>`;
       });
       html += '</div>'; // tree-ko-col
@@ -1497,9 +1643,14 @@ function renderTree(){
 
 
 function renderSch(){
+  renderTree(); // Gesamtübersicht (Baum) immer mit aktualisieren
+  const lbl = document.getElementById('sch-editable-lbl');
   if(!allTeams().length||S.phase==='setup'||S.phase==='editing'){
-    document.getElementById('sch-content').innerHTML='<div class="card"><p style="color:var(--muted);">Noch keine Spiele.</p></div>';return;
+    document.getElementById('sch-content').innerHTML='';
+    lbl.style.display='none';
+    return;
   }
+  lbl.style.display='block';
   let h='';
   if(activeTeam){
     const mine=[];
