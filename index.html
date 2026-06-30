@@ -602,6 +602,13 @@ function connectToTournament(id, isNew=false, initialState=null){
     if(!S.rosters) S.rosters={};
     if(!S.meta) S.meta={name:'',createdAt:0};
     if(S.schedule===undefined) S.schedule=null;
+    if(!Array.isArray(S.groups)) S.groups=[];
+    if(!S.groupMatches || typeof S.groupMatches!=='object') S.groupMatches={};
+    if(!Array.isArray(S.koRounds)) S.koRounds=[];
+    if(!S.teamPins) S.teamPins={};
+    if(!S.phase) S.phase='setup';
+    if(!S.tiebreaker) S.tiebreaker='direkt';
+    if(!S.adminPin) S.adminPin='1910';
     if('adminUnlocked' in S) delete S.adminUnlocked; // Altlast aus früherer Version entfernen
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
