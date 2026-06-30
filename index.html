@@ -57,6 +57,8 @@ td.tn{text-align:left;font-weight:600;}
 .pkt{font-weight:800;color:var(--blue);}
 .tdp{color:var(--green);}.tdn{color:var(--red);}
 .tbl-note{font-size:11px;color:var(--muted);margin-top:6px;}
+.q-col{width:24px;text-align:center;}
+.q-badge{display:inline-block;background:var(--green);color:#fff;font-weight:800;font-size:11px;width:18px;height:18px;line-height:18px;border-radius:4px;}
 
 /* MATCH CARDS */
 .mc{border:1px solid var(--border);border-radius:8px;padding:12px;margin-bottom:8px;border-left:4px solid var(--border);background:#fff;transition:border-color .2s;}
@@ -343,7 +345,7 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <div id="tl-roster-list" style="margin-bottom:10px;max-height:200px;overflow-y:auto;"></div>
       <div class="player-add-row">
         <input type="text" class="pnr-inp" id="tl-new-nr" placeholder="Nr." maxlength="3">
-        <input type="text" class="pname-inp" id="tl-new-name" placeholder="Spielername" onkeydown="if(event.key==='Enter')tlAddPlayer()">
+        <input type="text" class="pname-inp" id="tl-new-name" placeholder="Spielername">
         <button class="btn-add-player" onclick="tlAddPlayer()">+</button>
       </div>
       <button class="btn-confirm" onclick="tlFinishRoster()" style="margin-top:14px;">Weiter zum Turnier ✓</button>
@@ -410,6 +412,19 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <button class="opt-btn" data-val="indirekt" onclick="selOpt(this,'tb-opts')">Tordifferenz zuerst</button>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:16px;" id="tb-hint">Punkte → Direkter Vergleich → Tordifferenz → Tore</div>
+
+    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">④ Zugang & Kader</div>
+    <div class="opt-grp" id="setup-pin-opts">
+      <button class="opt-btn sel" data-val="yes" onclick="selOpt(this,'setup-pin-opts')">Team-PIN erforderlich</button>
+      <button class="opt-btn" data-val="no" onclick="selOpt(this,'setup-pin-opts')">Kein PIN nötig (nur Team wählen)</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:12px;">Ohne PIN-Pflicht reicht es, das eigene Team auszuwählen — einfacher, aber jeder könnte für jedes Team Ergebnisse eintragen.</div>
+    <div class="opt-grp" id="setup-roster-opts">
+      <button class="opt-btn sel" data-val="full" onclick="selOpt(this,'setup-roster-opts')">Kader: Nummer + Name</button>
+      <button class="opt-btn" data-val="numberOnly" onclick="selOpt(this,'setup-roster-opts')">Kader: nur Trikotnummer</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;">Bestimmt, was Teams bei der Kadereingabe angeben müssen.</div>
+
     <button class="btn-start" onclick="startTournament()">Turnier starten</button>
   </div>
   <div id="ov-live" style="display:none;">
@@ -420,7 +435,7 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
     </div>
     <div id="tb-badge" style="background:var(--dark);color:#fff;border-radius:6px;padding:6px 12px;font-size:12px;margin-bottom:12px;display:inline-block;"></div>
     <div id="ov-tables"></div>
-    <div id="ov-ko-btn" style="margin-top:8px;display:none;"><button class="btn-ko" onclick="buildKO()">🏆 KO-Runde generieren</button></div>
+    <div id="ov-ko-btn" style="margin-top:8px;display:none;"><p style="font-size:12px;color:var(--muted);">Die KO-Runde wird automatisch generiert, sobald alle Gruppenspiele gespielt und gesperrt sind.</p></div>
   </div>
 </div>
 
@@ -480,6 +495,22 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <div style="font-size:11px;color:var(--muted);">Anstoßzeiten werden beim Start automatisch berechnet und können danach pro Spiel im Spielplan noch manuell angepasst werden.</div>
     </div>
 
+    <div class="card" style="border-left:4px solid var(--green);">
+      <div style="font-weight:700;color:var(--green);margin-bottom:6px;">🥉 Platzierungsspiele</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Welche Platzierungsspiele sollen zusätzlich zur regulären KO-Runde gespielt werden? Die Auswahl passt sich automatisch an die zu erwartende Bracket-Größe an.</p>
+      <div id="placement-opts-box">
+        <p style="font-size:12px;color:var(--muted);font-style:italic;">Wird automatisch berechnet, sobald die Gruppenanzahl feststeht...</p>
+      </div>
+    </div>
+
+    <div class="card" style="border-left:4px solid var(--orange);">
+      <div style="font-weight:700;color:var(--orange);margin-bottom:6px;">⏱ Spielzeiten je KO-Runde</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Standardmäßig gilt für alle KO-Spiele dieselbe Spieldauer wie oben festgelegt. Hier kannst du einzelne Runden (z.B. das Finale) abweichend einstellen.</p>
+      <div id="ko-round-timing-box">
+        <p style="font-size:12px;color:var(--muted);font-style:italic;">Wird automatisch angezeigt, sobald die KO-Struktur feststeht...</p>
+      </div>
+    </div>
+
     <button onclick="startFromEditor()" style="background:var(--blue);color:#fff;border:none;padding:10px 22px;border-radius:7px;font-weight:700;font-size:14px;margin-bottom:20px;">⚽ Turnier mit diesem Zeitplan starten</button>
   </div>
   <div id="grp-content"><div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div></div>
@@ -492,7 +523,8 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 
 <div class="view" id="view-schedule">
   <div class="sec-title">Spielplan</div>
-  <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Gesamtübersicht mit allen Teams, Feldern und Anstoßzeiten — Gruppenphase und KO-Runde.</p>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:10px;">Gesamtübersicht mit allen Teams, Feldern und Anstoßzeiten — Gruppenphase und KO-Runde.</p>
+  <button onclick="exportSchedulePDF()" style="background:var(--blue);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;margin-bottom:14px;">📄 Als PDF exportieren / drucken</button>
   <div id="tree-content"><div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div></div>
   <div class="sub-lbl" id="sch-editable-lbl" style="display:none;margin-top:24px;">Ergebnisse eintragen</div>
   <div id="sch-content"></div>
@@ -517,7 +549,7 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
     <div class="card">
       <div style="color:var(--green);font-weight:700;margin-bottom:12px;">✓ Admin-Modus aktiv</div>
       <div class="admin-actions">
-        <button class="btn-ko" id="btn-build-ko" onclick="buildKO()" style="display:none;">🏆 KO-Runde generieren</button>
+        <span id="btn-build-ko" style="display:none;font-size:12px;color:var(--muted);">⏳ KO-Runde wird automatisch generiert, sobald alle Gruppenspiele fertig sind.</span>
         <button class="btn-lock" onclick="lockAdmin()">Admin sperren</button>
         <button class="btn-reset" onclick="resetAll()">⚠ Zurücksetzen</button>
       </div>
@@ -562,8 +594,12 @@ let suppressNextSnapshot = false; // verhindert Echo nach eigenem Schreiben
 function dflt(){
   return {
     meta:{ name:'', createdAt:0 },
-    phase:'setup', adminPin:'1910', tiebreaker:'direkt',
+    phase:'setup', adminPin:'1910', tiebreaker:'direkt', requirePin:true,
     schedule: null, // { firstTime, halves, halfLen, breakLen, matchDuration, fieldsGroup, fieldsKO }
+    placement: { selected: [] }, // Array gewählter Platzierungsspiel-Stufen, z.B. ['platz3','platz5_8']
+    placementGames: [], // generierte Platzierungsspiele
+    koTiming: null, // { perRound: {Viertelfinale:{...}, Halbfinale:{...}, Finale:{...}, ...} }
+    rosterMode: 'full', // 'full' = Nr+Name, 'numberOnly' = nur Trikotnummer
     groups:[], teamPins:{}, rosters:{}, groupMatches:{}, koRounds:[]
   };
 }
@@ -612,6 +648,11 @@ function connectToTournament(id, isNew=false, initialState=null){
     if(!S.phase) S.phase='setup';
     if(!S.tiebreaker) S.tiebreaker='direkt';
     if(!S.adminPin) S.adminPin='1910';
+    if(S.requirePin===undefined) S.requirePin=true;
+    if(!S.placement) S.placement={selected:[]};
+    if(!Array.isArray(S.placementGames)) S.placementGames=[];
+    if(S.koTiming===undefined) S.koTiming=null;
+    if(!S.rosterMode) S.rosterMode='full';
     if('adminUnlocked' in S) delete S.adminUnlocked; // Altlast aus früherer Version entfernen
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
@@ -681,7 +722,10 @@ function save(){
 
 function updateTournamentNameDisplay(){
   const el = document.getElementById('current-tournament-name');
-  if(el) el.textContent = S.meta?.name || 'Unbenanntes Turnier';
+  if(!el) return;
+  if(S.meta?.name){ el.textContent = S.meta.name; return; }
+  const created = S.meta?.createdAt ? new Date(S.meta.createdAt).toLocaleDateString('de-DE') : '';
+  el.textContent = `Turnier ohne Namen${created?' (angelegt '+created+')':''} — Code: ${TID}`;
 }
 
 
@@ -877,6 +921,20 @@ function openTeamLogin(){
 function tlSelectTeam(btn){
   document.querySelectorAll('.team-btn').forEach(b=>b.classList.remove('sel'));
   btn.classList.add('sel');
+  const team = btn.dataset.team;
+  if(!S.requirePin){
+    // Kein PIN nötig — direkt einloggen (bzw. Kader-Pflichtschritt falls noch leer)
+    activeTeam = team;
+    localStorage.setItem(ATK, team);
+    if(!S.rosters[team] || S.rosters[team].length===0){
+      document.getElementById('tl-pin-section').style.display='none';
+      document.getElementById('tl-roster-section').style.display='block';
+      renderTLRoster();
+      return;
+    }
+    tlFinishLogin();
+    return;
+  }
   document.getElementById('tl-pin-section').style.display='block';
   document.getElementById('tl-roster-section').style.display='none';
   document.getElementById('tl-pin-inp').value='';
@@ -915,17 +973,25 @@ function tlConfirm(){
 function renderTLRoster(){
   const pl = S.rosters[activeTeam]||[];
   const list = document.getElementById('tl-roster-list');
+  const numberOnly = S.rosterMode==='numberOnly';
   list.innerHTML = pl.length
-    ? pl.map((p,i)=>`<div class="player-chip"><span class="pnr">${esc(p.nr||'-')}</span><span class="pname">${esc(p.name)}</span><button class="btn-rm-player" onclick="tlRmPlayer(${i})">✕</button></div>`).join('')
+    ? pl.map((p,i)=>`<div class="player-chip"><span class="pnr">${esc(p.nr||'-')}</span>${numberOnly?'':`<span class="pname">${esc(p.name)}</span>`}<button class="btn-rm-player" onclick="tlRmPlayer(${i})">✕</button></div>`).join('')
     : '<p style="font-size:12px;color:var(--muted);">Noch keine Spieler eingetragen.</p>';
+  // Namensfeld je nach Kader-Modus zeigen/verstecken
+  const nameInp = document.getElementById('tl-new-name');
+  nameInp.style.display = numberOnly ? 'none' : '';
+  document.getElementById('tl-new-nr').placeholder = numberOnly ? 'Trikotnummer' : 'Nr.';
 }
 function tlAddPlayer(){
   const nrInp=document.getElementById('tl-new-nr'), nameInp=document.getElementById('tl-new-name');
-  const nr=nrInp.value.trim(), name=nameInp.value.trim();
-  if(!name){ alert('Bitte einen Spielernamen eingeben.'); return; }
+  const nr=nrInp.value.trim();
+  const numberOnly = S.rosterMode==='numberOnly';
+  const name = numberOnly ? '' : nameInp.value.trim();
+  if(numberOnly && !nr){ alert('Bitte eine Trikotnummer eingeben.'); return; }
+  if(!numberOnly && !name){ alert('Bitte einen Spielernamen eingeben.'); return; }
   if(!S.rosters[activeTeam]) S.rosters[activeTeam]=[];
   S.rosters[activeTeam].push({name,nr});
-  nrInp.value=''; nameInp.value=''; nameInp.focus();
+  nrInp.value=''; nameInp.value=''; nrInp.focus();
   save(); renderTLRoster();
 }
 function tlRmPlayer(idx){ S.rosters[activeTeam].splice(idx,1); save(); renderTLRoster(); }
@@ -1010,18 +1076,21 @@ function tblHTML(teams,matches,grpName){
   const rows=standings(teams,matches);
   const note=S.tiebreaker==='direkt'?'Tiebreaker: Punkte → Dir.Vgl. → Tordiff. → Tore':'Tiebreaker: Punkte → Tordiff. → Tore → Dir.Vgl.';
   let h=`<div class="standings-wrap"><div class="group-lbl">Gruppe ${grpName}</div>
-    <table><thead><tr><th>#</th><th style="text-align:left">Team</th><th>Sp</th><th>G</th><th>U</th><th>V</th><th>Tore</th><th>TD</th><th>Pkt</th></tr></thead><tbody>`;
+    <table><thead><tr><th>#</th><th></th><th style="text-align:left">Team</th><th>Sp</th><th>G</th><th>U</th><th>V</th><th>Tore</th><th>TD</th><th>Pkt</th></tr></thead><tbody>`;
   rows.forEach((r,i)=>{
     const mine=activeTeam&&r.team===activeTeam;
+    const qualified = i<2;
     const cls=[i===0?'top':i%2===0?'even':'',mine?'mine':''].join(' ');
     const td=r.td>0?'+'+r.td:r.td;
     const tdcls=r.td>0?'tdp':r.td<0?'tdn':'';
-    h+=`<tr class="${cls}"><td style="font-weight:700;color:${i<2?'var(--green)':'var(--muted)'}">${i+1}</td>
-      <td class="tn">${i<2?'<span style="color:var(--green)">✓</span> ':''}${esc(r.team)}${mine?' 👤':''}</td>
+    const fw = qualified ? '800' : '600'; // Platz 1+2 fett
+    h+=`<tr class="${cls}"><td style="font-weight:700;color:${qualified?'var(--green)':'var(--muted)'}">${i+1}</td>
+      <td class="q-col">${qualified?'<span class="q-badge">Q</span>':''}</td>
+      <td class="tn" style="font-weight:${fw};">${esc(r.team)}${mine?' 👤':''}</td>
       <td>${r.sp}</td><td>${r.g}</td><td>${r.u}</td><td>${r.v}</td>
       <td>${r.tore}:${r.gegen}</td><td class="${tdcls}">${td}</td><td class="pkt">${r.pkt}</td></tr>`;
   });
-  h+=`</tbody></table><div class="tbl-note">✓ = qualifiziert · ${note}</div></div>`;
+  h+=`</tbody></table><div class="tbl-note">Q = qualifiziert für die KO-Runde · ${note}</div></div>`;
   return h;
 }
 
@@ -1080,9 +1149,14 @@ function refreshPlayerOptions(matchId){
   const teamSel = document.getElementById('aev-team-'+matchId).value;
   const team = teamSel==='home'?m.home:m.away;
   const pl = roster(team);
+  const numberOnly = S.rosterMode==='numberOnly';
   const sel = document.getElementById('aev-player-'+matchId);
   sel.innerHTML = pl.length
-    ? pl.map(p=>`<option value="${esc(p.name)}">#${esc(p.nr)} ${esc(p.name)}</option>`).join('')
+    ? pl.map(p=>{
+        const label = numberOnly ? `#${esc(p.nr)}` : `#${esc(p.nr)} ${esc(p.name)}`;
+        const value = numberOnly ? `#${esc(p.nr)}` : esc(p.name); // eindeutiger Wert, auch ohne Namen
+        return `<option value="${value}">${label}</option>`;
+      }).join('')
     : '<option value="">(kein Kader hinterlegt)</option>';
 }
 
@@ -1095,6 +1169,7 @@ function selEvType(btn, matchId){
 function findMatch(id){
   for(const gi in S.groupMatches){ const m=S.groupMatches[gi].find(x=>x.id===id); if(m) return m; }
   for(const ri in S.koRounds){ const m=S.koRounds[ri].matches.find(x=>x.id===id); if(m) return m; }
+  for(const pg of (S.placementGames||[])){ const m=pg.matches.find(x=>x.id===id); if(m) return m; }
   return null;
 }
 
@@ -1206,18 +1281,39 @@ function doSave(id, pool, afterFn){
 function saveGM(id){
   for(const gi in S.groupMatches){
     const m=S.groupMatches[gi].find(x=>x.id===id);
-    if(m){ doSave(id,S.groupMatches[gi],()=>{}); return; }
+    if(m){
+      doSave(id,S.groupMatches[gi],()=>{});
+      checkAutoGenerateKO();
+      return;
+    }
   }
+}
+// Sobald ALLE Gruppenspiele gespielt+gesperrt sind, wird die KO-Runde automatisch
+// generiert — kein Admin-Klick mehr nötig. Läuft nur EINMALIG (beim allerersten
+// Komplett-Abschluss), damit spätere nachträgliche Korrekturen einzelner
+// Ergebnisse nicht versehentlich eine bereits laufende KO-Runde überschreiben.
+function checkAutoGenerateKO(){
+  if(S.phase!=='group') return;
+  if(S.koRounds && S.koRounds.length>0) return; // schon generiert
+  const allGM = Object.values(S.groupMatches).flat();
+  if(!allGM.length) return;
+  const allDone = allGM.every(m => m.h!=='' && m.a!=='' && m.locked);
+  if(allDone) buildKO();
 }
 function saveKO(id){
   for(const ri in S.koRounds){
     const m=S.koRounds[ri].matches.find(x=>x.id===id);
     if(m){ doSave(id,S.koRounds[ri].matches,()=>propKO()); return; }
   }
+  for(const pg of (S.placementGames||[])){
+    const m=pg.matches.find(x=>x.id===id);
+    if(m){ doSave(id,pg.matches,()=>propKO()); return; }
+  }
 }
 function unlockMatch(id){
   for(const gi in S.groupMatches){ const m=S.groupMatches[gi].find(x=>x.id===id); if(m){m.locked=false;save();renderAll();return;} }
   for(const ri in S.koRounds){ const m=S.koRounds[ri].matches.find(x=>x.id===id); if(m){m.locked=false;save();renderAll();return;} }
+  for(const pg of (S.placementGames||[])){ const m=pg.matches.find(x=>x.id===id); if(m){m.locked=false;save();renderAll();return;} }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1241,9 +1337,11 @@ function startTournament(){
   const ng=parseInt(document.getElementById('setup-groups').value);
   const apin=document.getElementById('setup-adminpin').value||'1910';
   const tb=document.querySelector('#tb-opts .opt-btn.sel')?.dataset.val||'direkt';
+  const requirePin = (document.querySelector('#setup-pin-opts .opt-btn.sel')?.dataset.val||'yes')==='yes';
+  const rosterMode = document.querySelector('#setup-roster-opts .opt-btn.sel')?.dataset.val||'full';
   const groups=Array.from({length:ng},(_,i)=>({name:String.fromCharCode(65+i),teams:[]}));
   teams.forEach((t,i)=>groups[i%ng].teams.push(t));
-  S=Object.assign(dflt(),{phase:'editing',adminPin:apin,tiebreaker:tb,groups,teamPins:makePins(teams),rosters:{},groupMatches:{},koRounds:[]});
+  S=Object.assign(dflt(),{phase:'editing',adminPin:apin,tiebreaker:tb,requirePin,rosterMode,groups,teamPins:makePins(teams),rosters:{},groupMatches:{},koRounds:[]});
   save(); showView('groups');
 }
 
@@ -1264,10 +1362,88 @@ function renderGE(){
     h+=`<div class="ge-add"><input type="text" id="nt-${gi}" placeholder="Team hinzufügen..." onkeydown="if(event.key==='Enter')addT(${gi})"><button class="btn-add" onclick="addT(${gi})">+</button></div></div>`;
   });
   document.getElementById('ge-editors').innerHTML=h;
-  setTimeout(updateSchedDurationHint, 0);
+  setTimeout(()=>{ updateSchedDurationHint(); renderPlacementAndTimingPreview(); }, 0);
 }
 function mvTeam(fi,ti,to){ S.groups[to].teams.push(S.groups[fi].teams.splice(ti,1)[0]); save();renderGE(); }
 function rmTeam(gi,ti){ const t=S.groups[gi].teams.splice(ti,1)[0]; delete S.teamPins[t]; delete S.rosters[t]; save();renderGE(); }
+
+// Simuliert NUR die Bracket-STRUKTUR (Rundennamen, Anzahl Spiele je Runde) basierend
+// auf der aktuellen Gruppenanzahl — ohne echte Teamnamen, nur für die Setup-Vorschau
+// von Platzierungsspielen und Rundenzeiten, bevor überhaupt gespielt wird.
+function simulateKOStructure(){
+  const ng = S.groups.length;
+  if(ng===0) return [];
+  // Gleiche Logik wie computeQualifiers: Top2 je Gruppe, ggf. + beste Dritte
+  const baseCount = ng*2;
+  const nextPow2 = Math.pow(2, Math.ceil(Math.log2(Math.max(baseCount,1))));
+  const dummy = Array.from({length:nextPow2}, (_,i)=>({team:'T'+i}));
+  return mkBracket(dummy); // Rundennamen + Spielanzahl sind das einzig Relevante hier
+}
+
+function renderPlacementAndTimingPreview(){
+  const structure = simulateKOStructure();
+  const placementBox = document.getElementById('placement-opts-box');
+  const timingBox = document.getElementById('ko-round-timing-box');
+  if(!structure.length){
+    placementBox.innerHTML = '<p style="font-size:12px;color:var(--muted);font-style:italic;">Mindestens 2 Gruppen nötig.</p>';
+    timingBox.innerHTML = '';
+    return;
+  }
+
+  // ── Platzierungsspiele-Optionen ──
+  const opts = availablePlacementOptions(structure);
+  if(!opts.length){
+    placementBox.innerHTML = '<p style="font-size:12px;color:var(--muted);">Bei dieser Turniergröße sind keine zusätzlichen Platzierungsspiele sinnvoll möglich (nur Finale).</p>';
+  } else {
+    placementBox.innerHTML = opts.map(o=>`
+      <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;cursor:pointer;">
+        <input type="checkbox" class="placement-cb" value="${o.key}" style="width:16px;height:16px;">
+        ${esc(o.label)} <span style="color:var(--muted);font-size:11px;">(${o.resultLabel}, ${o.numGames} Spiel${o.numGames>1?'e':''})</span>
+      </label>`).join('');
+  }
+
+  // ── Spielzeiten je Runde ──
+  const roundNames = structure.map(r=>r.name);
+  // Platzierungsspiel-Namen kommen dazu, falls Checkboxen aktiv sind (nach Render erneut prüfen via Event)
+  timingBox.innerHTML = roundNames.map(name=>`
+    <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--bg);">
+      <span style="font-weight:600;font-size:13px;min-width:110px;">${esc(name)}:</span>
+      <select class="rt-halves" data-round="${esc(name)}" style="padding:4px 8px;border-radius:5px;border:1px solid var(--border);font-size:12px;">
+        <option value="1">1 HZ</option><option value="2">2 HZ</option>
+      </select>
+      <input type="number" class="rt-halflen" data-round="${esc(name)}" placeholder="Min/HZ" min="1" max="60" style="width:60px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);font-size:12px;">
+      <span style="font-size:11px;color:var(--muted);">Min. je Halbzeit (leer = Standard übernehmen)</span>
+    </div>`).join('');
+
+  // Checkbox-Änderungen sollen die Timing-Liste um Platzierungsspiel-Zeilen erweitern
+  document.querySelectorAll('.placement-cb').forEach(cb=>{
+    cb.addEventListener('change', updateTimingBoxWithPlacements);
+  });
+}
+
+function updateTimingBoxWithPlacements(){
+  const timingBox = document.getElementById('ko-round-timing-box');
+  // Bestehende Platzierungsspiel-Zeilen entfernen, dann neu anhand aktueller Checkbox-Auswahl hinzufügen
+  timingBox.querySelectorAll('[data-placement-row]').forEach(el=>el.remove());
+  const checked = [...document.querySelectorAll('.placement-cb:checked')];
+  const opts = availablePlacementOptions(simulateKOStructure());
+  checked.forEach(cb=>{
+    const opt = opts.find(o=>o.key===cb.value);
+    if(!opt) return;
+    const row = document.createElement('div');
+    row.setAttribute('data-placement-row','1');
+    row.style.cssText='display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:6px 0;border-bottom:1px solid var(--bg);';
+    row.innerHTML = `
+      <span style="font-weight:600;font-size:13px;min-width:110px;">${esc(opt.label)}:</span>
+      <select class="rt-halves" data-round="${esc(opt.label)}" style="padding:4px 8px;border-radius:5px;border:1px solid var(--border);font-size:12px;">
+        <option value="1">1 HZ</option><option value="2">2 HZ</option>
+      </select>
+      <input type="number" class="rt-halflen" data-round="${esc(opt.label)}" placeholder="Min/HZ" min="1" max="60" style="width:60px;padding:4px 6px;border-radius:5px;border:1px solid var(--border);font-size:12px;">
+      <span style="font-size:11px;color:var(--muted);">Min. je Halbzeit (leer = Standard übernehmen)</span>`;
+    timingBox.appendChild(row);
+  });
+}
+
 function addT(gi){
   const inp=document.getElementById('nt-'+gi); const v=inp.value.trim(); if(!v)return;
   if(allTeams().includes(v)){alert('Team existiert bereits.');return;}
@@ -1300,6 +1476,23 @@ function startFromEditor(){
 
   S.schedule = { firstTime, halves, halfLen, breakLen, gapLen, pureMatch, matchDuration, fieldsGroup, fieldsKO };
 
+  // Platzierungsspiele-Auswahl übernehmen
+  const selectedPlacements = [...document.querySelectorAll('.placement-cb:checked')].map(cb=>cb.value);
+  S.placement = { selected: selectedPlacements };
+
+  // Abweichende Spielzeiten pro KO-Runde (nur dort, wo der Admin etwas eingetragen hat)
+  const perRound = {};
+  document.querySelectorAll('.rt-halves').forEach(sel=>{
+    const roundName = sel.dataset.round;
+    const halvesOverride = +sel.value;
+    const lenInput = document.querySelector(`.rt-halflen[data-round="${CSS.escape(roundName)}"]`);
+    const halfLenOverride = lenInput && lenInput.value ? +lenInput.value : null;
+    if(halfLenOverride){ // nur speichern, wenn Admin wirklich einen Wert eingetragen hat
+      perRound[roundName] = { halves: halvesOverride, halfLen: halfLenOverride, breakLen, gapLen };
+    }
+  });
+  S.koTiming = Object.keys(perRound).length ? { perRound } : null;
+
   // Alle Gruppenspiele automatisch verteilen (chronologisch über Felder hinweg)
   const allGroupMatches = [];
   S.groups.forEach((g,gi)=>gm[gi].forEach(m=>allGroupMatches.push(m)));
@@ -1331,17 +1524,18 @@ function scheduleMatchList(matches, startTime, matchDuration, numFields){
 function renderRosterEditor(){
   const teams = allTeams();
   if(!teams.length){ return '<p style="color:var(--muted);font-size:13px;">Noch keine Teams vorhanden.</p>'; }
+  const numberOnly = S.rosterMode==='numberOnly';
   let h='<div class="roster-section">';
   teams.forEach(t=>{
     const pl = roster(t);
     h+=`<div class="roster-team-block"><div class="roster-team-lbl">${esc(t)}</div>`;
     pl.forEach((p,pi)=>{
-      h+=`<div class="player-chip"><span class="pnr">${esc(p.nr||'-')}</span><span class="pname">${esc(p.name)}</span>
+      h+=`<div class="player-chip"><span class="pnr">${esc(p.nr||'-')}</span>${numberOnly?'':`<span class="pname">${esc(p.name)}</span>`}
         <button class="btn-rm-player" onclick="rmPlayer('${esc(t)}',${pi})">✕</button></div>`;
     });
     h+=`<div class="player-add-row">
-      <input type="text" class="pnr-inp" id="pnr-${esc(t)}" placeholder="Nr." maxlength="3">
-      <input type="text" class="pname-inp" id="pname-${esc(t)}" placeholder="Spielername" onkeydown="if(event.key==='Enter')addPlayer('${esc(t)}')">
+      <input type="text" class="pnr-inp" id="pnr-${esc(t)}" placeholder="${numberOnly?'Trikotnummer':'Nr.'}" maxlength="3">
+      <input type="text" class="pname-inp" id="pname-${esc(t)}" placeholder="Spielername" style="${numberOnly?'display:none;':''}" onkeydown="if(event.key==='Enter')addPlayer('${esc(t)}')">
       <button class="btn-add-player" onclick="addPlayer('${esc(t)}')">+ Hinzufügen</button>
     </div></div>`;
   });
@@ -1351,9 +1545,11 @@ function renderRosterEditor(){
 function addPlayer(team){
   const nrInp = document.getElementById('pnr-'+team);
   const nameInp = document.getElementById('pname-'+team);
+  const numberOnly = S.rosterMode==='numberOnly';
   const nr = nrInp.value.trim();
-  const name = nameInp.value.trim();
-  if(!name){ alert('Bitte einen Spielernamen eingeben.'); return; }
+  const name = numberOnly ? '' : nameInp.value.trim();
+  if(numberOnly && !nr){ alert('Bitte eine Trikotnummer eingeben.'); return; }
+  if(!numberOnly && !name){ alert('Bitte einen Spielernamen eingeben.'); return; }
   if(!S.rosters[team]) S.rosters[team]=[];
   S.rosters[team].push({name, nr});
   nrInp.value=''; nameInp.value='';
@@ -1449,17 +1645,38 @@ function bracketName(size){
 function buildKO(){
   const { seeded } = computeQualifiers(false); // false = echte Teamnamen, keine Platzhalter (Gruppenphase ist hier final)
   S.koRounds=mkBracket(seeded);
+  generatePlacementGames(); // erzeugt S.placementGames basierend auf S.placement.selected
 
-  // KO-Zeitplan: automatisch ab Ende der Gruppenphase, jede Runde nacheinander
+  // KO-Zeitplan: automatisch ab Ende der Gruppenphase, jede Runde nacheinander.
+  // Pro Runde wird geprüft, ob eine abweichende Dauer in S.koTiming.perRound hinterlegt ist
+  // (z.B. "Finale" länger oder mit 2 Halbzeiten) — sonst gilt die Standard-Dauer aus S.schedule.
   const sched = S.schedule;
   if(sched){
+    const durationForRound = (roundName) => {
+      const override = S.koTiming?.perRound?.[roundName];
+      if(!override) return sched.matchDuration;
+      const pure = override.halves===2 ? (override.halfLen*2 + (override.breakLen??sched.breakLen)) : override.halfLen;
+      return pure + (override.gapLen ?? sched.gapLen);
+    };
     const allGM = Object.values(S.groupMatches).flat();
-    const lastGroupEnd = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
-    let nextStart = lastGroupEnd;
+    let nextStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
     S.koRounds.forEach(round=>{
       const playable = round.matches.filter(m=>!m.isFrei);
-      scheduleMatchList(playable, nextStart, sched.matchDuration, sched.fieldsKO);
-      nextStart = latestMatchEnd(playable, sched.matchDuration, sched.fieldsKO, nextStart);
+      const dur = durationForRound(round.name);
+      scheduleMatchList(playable, nextStart, dur, sched.fieldsKO);
+      nextStart = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
+    });
+    // Platzierungsspiele zeitlich nach der jeweiligen Quellrunde einplanen,
+    // parallel zur nächsten regulären Runde (gleiches Zeitfenster, eigenes Feld i.d.R.)
+    (S.placementGames||[]).forEach(pg=>{
+      const sourceRoundIdx = S.koRounds.findIndex(r=>r.name===pg.sourceRound);
+      if(sourceRoundIdx<0) return;
+      const sourceEnd = latestMatchEnd(
+        S.koRounds[sourceRoundIdx].matches.filter(m=>!m.isFrei),
+        durationForRound(pg.sourceRound), sched.fieldsKO, sched.firstTime
+      );
+      const dur = durationForRound(pg.label);
+      scheduleMatchList(pg.matches, sourceEnd, dur, sched.fieldsKO);
     });
   }
 
@@ -1500,7 +1717,7 @@ function mkBracket(q){
       const isF=t1==='Freilos'||t2==='Freilos';
       ms.push({
         id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,
-        winner:isF?(t1!=='Freilos'?t1:t2):null,isFrei:isF,events:[],
+        winner:isF?(t1!=='Freilos'?t1:t2):null,loser:null,isFrei:isF,events:[],
         // Origin nur als Untertitel zeigen, wenn der Hauptname bereits ein echter Teamname ist
         // (sonst wäre es doppelt, weil der Origin-Text schon die Hauptanzeige ist)
         homeOrigin: (ri===0 && cur[i]?.team) ? origin1 : null,
@@ -1512,12 +1729,75 @@ function mkBracket(q){
   }
   return rounds;
 }
+// Ermittelt, welche Platzierungsspiel-Stufen bei einer gegebenen KO-Rundenanzahl
+// überhaupt möglich sind. Z.B. bei Viertelfinale (4 Spiele) sind "Platz 3" (aus
+// Halbfinale-Verlierern) UND "Platz 5-8" (aus Viertelfinale-Verlierern) möglich.
+function availablePlacementOptions(koRounds){
+  const opts = [];
+  koRounds.forEach(r=>{
+    const playable = r.matches.filter(m=>!m.isFrei);
+    if(playable.length<1) return;
+    if(r.name==='Finale') return; // Finale selbst ist kein Quell für Platzierungsspiele
+    if(r.name==='Halbfinale'){
+      opts.push({key:'platz3', sourceRound:'Halbfinale', label:'Spiel um Platz 3', resultLabel:'Platz 3/4', numGames:1});
+    } else if(r.name==='Viertelfinale'){
+      const n = playable.length; // i.d.R. 4
+      opts.push({key:'platz5_8', sourceRound:'Viertelfinale', label:`Spiele um Platz 5–${4+n}`, resultLabel:`Platz 5–${4+n}`, numGames:Math.floor(n/2)});
+    } else if(r.name==='Achtelfinale'){
+      const n = playable.length;
+      opts.push({key:'platz9_16', sourceRound:'Achtelfinale', label:`Spiele um Platz 9–${8+n}`, resultLabel:`Platz 9–${8+n}`, numGames:Math.floor(n/2)});
+    }
+  });
+  return opts;
+}
+
+// Generiert die tatsächlichen Platzierungsspiel-Objekte basierend auf der
+// Admin-Auswahl in S.placement.selected (Array von keys wie 'platz3','platz5_8').
+function generatePlacementGames(){
+  if(!S.placement || !S.placement.selected || !S.placement.selected.length) { S.placementGames=[]; return; }
+  const opts = availablePlacementOptions(S.koRounds);
+  const games = [];
+  S.placement.selected.forEach(key=>{
+    const opt = opts.find(o=>o.key===key);
+    if(!opt) return;
+    const matches = [];
+    for(let i=0;i<opt.numGames;i++){
+      matches.push({id:uid(),home:'?',away:'?',h:'',a:'',time:'',locked:false,winner:null,loser:null,isFrei:false,events:[]});
+    }
+    games.push({ key:opt.key, sourceRound:opt.sourceRound, label:opt.label, resultLabel:opt.resultLabel, matches });
+  });
+  S.placementGames = games;
+  propagateToPlacementGames();
+}
+
 function propKO(){
-  S.koRounds.forEach(r=>r.matches.forEach(m=>{ if(m.h!==''&&m.a!==''&&!m.isFrei) m.winner=+m.h>+m.a?m.home:m.away; }));
+  S.koRounds.forEach(r=>r.matches.forEach(m=>{
+    if(m.h!==''&&m.a!==''&&!m.isFrei){
+      m.winner=+m.h>+m.a?m.home:m.away;
+      m.loser=+m.h>+m.a?m.away:m.home;
+    }
+  }));
   for(let ri=0;ri<S.koRounds.length-1;ri++){
     const cur=S.koRounds[ri],nxt=S.koRounds[ri+1];
     cur.matches.forEach((m,mi)=>{ const sl=Math.floor(mi/2),ih=mi%2===0; if(sl<nxt.matches.length&&m.winner){ if(ih)nxt.matches[sl].home=m.winner; else nxt.matches[sl].away=m.winner; } });
   }
+  propagateToPlacementGames();
+}
+
+// Speist die Verlierer bestimmter Runden automatisch in die konfigurierten
+// Platzierungsspiele ein (z.B. Verlierer Halbfinale → Spiel um Platz 3).
+function propagateToPlacementGames(){
+  if(!S.placementGames || !S.placementGames.length) return;
+  S.placementGames.forEach(pg=>{
+    const sourceRound = S.koRounds.find(r=>r.name===pg.sourceRound);
+    if(!sourceRound) return;
+    const losers = sourceRound.matches.filter(m=>!m.isFrei).map(m=>m.loser).filter(Boolean);
+    // Reihenfolge der Verlierer entspricht der Reihenfolge der Quellspiele
+    pg.matches.forEach((m,idx)=>{
+      if(losers[idx*2] && m.home==='?') m.home = losers[idx*2];
+      if(losers[idx*2+1] && m.away==='?') m.away = losers[idx*2+1];
+    });
+  });
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1611,12 +1891,105 @@ function renderGrp(){
 
 function renderKO(){
   if(!S.koRounds.length){document.getElementById('ko-content').innerHTML='<div class="card"><p style="color:var(--muted);">KO-Runde noch nicht generiert.</p></div>';return;}
-  document.getElementById('ko-content').innerHTML=S.koRounds.map((r,ri)=>`
+  let html = S.koRounds.map((r,ri)=>`
     <div class="card">
       <div class="ko-title">${ri===S.koRounds.length-1?'🏆 ':''} ${esc(r.name)}</div>
       ${r.matches.map(m=>m.isFrei?`<div class="freilos">${esc(m.home!=='Freilos'?m.home:m.away)} — Freilos</div>`:mcHTML(m,'saveKO',true)).join('')}
     </div>`).join('');
+  // Platzierungsspiele anhängen
+  (S.placementGames||[]).forEach(pg=>{
+    html += `<div class="card" style="border-left:4px solid var(--green);">
+      <div class="ko-title">🥉 ${esc(pg.label)}</div>
+      ${pg.matches.map(m=>mcHTML(m,'saveKO',true)).join('')}
+    </div>`;
+  });
+  document.getElementById('ko-content').innerHTML = html;
   setTimeout(initEventDropdowns, 0);
+}
+
+// ═══════════════════════════════════════════════════════════════
+// TURNIERBAUM — Gesamtübersicht: Gruppenphase + KO-Baum
+// ═══════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// PDF-EXPORT / DRUCKANSICHT — öffnet eine eigene, druckoptimierte Seite
+// und löst den Browser-Druckdialog aus ("Als PDF speichern" wählbar).
+// ═══════════════════════════════════════════════════════════════
+function exportSchedulePDF(){
+  const w = window.open('', '_blank');
+  if(!w){ alert('Bitte Pop-ups für diese Seite erlauben, um den PDF-Export zu nutzen.'); return; }
+
+  let html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
+  <title>Spielplan – ${esc(S.meta?.name||'Schümmelcup')}</title>
+  <style>
+    body{font-family:Arial,Helvetica,sans-serif;color:#09183A;margin:24px;}
+    h1{font-size:22px;margin-bottom:2px;}
+    h2{font-size:12px;color:#5B6F96;font-weight:normal;margin-top:0;margin-bottom:20px;text-transform:uppercase;letter-spacing:1px;}
+    h3{font-size:16px;border-left:4px solid #0050A0;padding-left:8px;margin-top:24px;margin-bottom:8px;}
+    table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;}
+    th{background:#00317A;color:#fff;padding:6px 8px;text-align:left;}
+    td{padding:5px 8px;border-bottom:1px solid #ddd;}
+    tr:nth-child(even){background:#f5f8fc;}
+    .win{font-weight:700;}
+    .grp-box{display:inline-block;width:48%;vertical-align:top;margin-right:1%;margin-bottom:14px;}
+    @media print{ .no-print{display:none;} body{margin:10mm;} }
+    .print-btn{background:#0050A0;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;margin-bottom:20px;}
+  </style></head><body>
+  <button class="print-btn no-print" onclick="window.print()">🖨 Jetzt drucken / als PDF speichern</button>
+  <h1>${esc(S.meta?.name || 'Schümmelcup')}</h1>
+  <h2>Spielplan — Gruppenphase &amp; KO-Runde</h2>`;
+
+  // Gruppenphase
+  html += `<h3>Gruppenphase</h3><div>`;
+  S.groups.forEach((g,gi)=>{
+    const rows = standings(g.teams, S.groupMatches[gi]||[]);
+    html += `<div class="grp-box"><strong>Gruppe ${esc(g.name)}</strong>
+      <table><thead><tr><th>#</th><th>Team</th><th>Pkt</th><th>Tore</th></tr></thead><tbody>`;
+    rows.forEach((r,i)=>{
+      html += `<tr><td>${i+1}</td><td>${esc(r.team)}</td><td>${r.pkt}</td><td>${r.tore}:${r.gegen}</td></tr>`;
+    });
+    html += `</tbody></table></div>`;
+  });
+  html += `</div>`;
+
+  // Spielplan Gruppenphase chronologisch
+  html += `<h3>Spielplan Gruppenphase</h3><table><thead><tr><th>Zeit</th><th>Feld</th><th>Gruppe</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
+  const allGroupMatches = [];
+  S.groups.forEach((g,gi)=>(S.groupMatches[gi]||[]).forEach(m=>allGroupMatches.push({...m, grp:g.name})));
+  allGroupMatches.sort((a,b)=> (a.time||'').localeCompare(b.time||'') || (a.field||0)-(b.field||0));
+  allGroupMatches.forEach(m=>{
+    const played = m.h!==''&&m.a!=='';
+    html += `<tr><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.grp)}</td><td>${esc(m.home)}</td><td>${played?m.h+':'+m.a:'–:–'}</td><td>${esc(m.away)}</td></tr>`;
+  });
+  html += `</tbody></table>`;
+
+  // KO-Runde
+  if(S.koRounds.length){
+    html += `<h3>KO-Runde</h3><table><thead><tr><th>Runde</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
+    S.koRounds.forEach(r=>{
+      r.matches.forEach(m=>{
+        if(m.isFrei) return;
+        const played = m.h!==''&&m.a!=='';
+        html += `<tr><td>${esc(r.name)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td class="${m.winner===m.home?'win':''}">${esc(m.home)}</td><td>${played?m.h+':'+m.a:'–:–'}</td><td class="${m.winner===m.away?'win':''}">${esc(m.away)}</td></tr>`;
+      });
+    });
+    html += `</tbody></table>`;
+  }
+
+  // Platzierungsspiele
+  if(S.placementGames && S.placementGames.length){
+    html += `<h3>Platzierungsspiele</h3><table><thead><tr><th>Spiel</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
+    S.placementGames.forEach(pg=>{
+      pg.matches.forEach(m=>{
+        const played = m.h!==''&&m.a!=='';
+        html += `<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.home)}</td><td>${played?m.h+':'+m.a:'–:–'}</td><td>${esc(m.away)}</td></tr>`;
+      });
+    });
+    html += `</tbody></table>`;
+  }
+
+  html += `</body></html>`;
+  w.document.write(html);
+  w.document.close();
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1731,7 +2104,7 @@ function renderTree(){
       const previewRounds = mkBracket(seeded);
       html += '<div class="card" style="border-left:4px solid var(--orange);">';
       html += '<div class="tree-phase-lbl" style="background:var(--orange);">🔮 KO-Runde — Live-Vorschau (vorläufig)</div>';
-      html += `<p style="font-size:12px;color:var(--muted);margin-bottom:12px;">${esc(scheme)} Diese Vorschau basiert auf dem <strong>aktuellen Tabellenstand</strong> und ändert sich, sobald sich Gruppenspiele-Ergebnisse ändern. Sie wird erst verbindlich, wenn die Gruppenphase abgeschlossen und „KO-Runde generieren" geklickt wird.</p>`;
+      html += `<p style="font-size:12px;color:var(--muted);margin-bottom:12px;">${esc(scheme)} Diese Vorschau basiert auf dem <strong>aktuellen Tabellenstand</strong> und ändert sich, sobald sich Gruppenspiele-Ergebnisse ändern. Sie wird automatisch verbindlich, sobald alle Gruppenspiele gespielt und gesperrt sind.</p>`;
       html += '<div class="tree-ko-rounds">';
       previewRounds.forEach((r,ri)=>{
         html += `<div class="tree-ko-col"><div class="tree-ko-col-title">${ri===previewRounds.length-1?'🏆 ':''}${esc(r.name)}</div>`;
