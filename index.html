@@ -582,7 +582,10 @@ function newTournamentId(){
 
 // ── Verbindung zu einem Turnier herstellen (oder neues anlegen) ──
 function connectToTournament(id, isNew=false, initialState=null){
-  if(fbUnsub){ fbUnsub(); fbUnsub=null; }
+  // Alten Listener sauber abmelden — explizit über die Referenz statt über die
+  // zurückgegebene Callback-Funktion (die in manchen Firebase-Versionen intern crashen kann).
+  if(fbRef){ try{ fbRef.off('value'); }catch(e){ console.warn('Firebase off() Warnung (ignoriert):', e); } }
+  fbUnsub = null;
   TID = id;
   localStorage.setItem(LK, id);
   fbRef = fbdb.ref('tournaments/'+id);
@@ -651,7 +654,9 @@ function connectToTournament(id, isNew=false, initialState=null){
 }
 
 function disconnectTournament(){
-  if(fbUnsub){ fbUnsub(); fbUnsub=null; }
+  // Gleiches Prinzip wie in connectToTournament: explizit über die Referenz abmelden.
+  if(fbRef){ try{ fbRef.off('value'); }catch(e){ console.warn('Firebase off() Warnung (ignoriert):', e); } }
+  fbUnsub = null;
   TID = null;
   localStorage.removeItem(LK);
   activeTeam = null;
@@ -661,11 +666,12 @@ function disconnectTournament(){
 }
 
 // ── Schreiben: gesamten State an Firebase senden (debounced) ──
+const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn)=>setTimeout(fn, 16);
 function save(){
   if(!TID) return;
   if(saveQueued) return;
   saveQueued = true;
-  requestAnimationFrame(()=>{
+  raf(()=>{
     saveQueued = false;
     fbdb.ref('tournaments/'+TID).set(S).catch(err=>{
       console.error('Firebase save error:', err);
@@ -1361,23 +1367,68 @@ function rmPlayer(team, idx){
 // ═══════════════════════════════════════════════════════════════
 // KO
 // ═══════════════════════════════════════════════════════════════
-function buildKO(){
-  // Klassische Kreuz-Setzung: Sieger Gruppe 1 vs. Zweiter Gruppe 2, Sieger Gruppe 2 vs. Zweiter Gruppe 3, usw.
-  // Verhindert, dass zwei Teams aus derselben Gruppe schon im ersten KO-Spiel aufeinandertreffen.
+// ═══════════════════════════════════════════════════════════════
+// AUTOMATISCHE KO-QUALIFIKATION
+// Wählt je nach Gruppenanzahl automatisch das passende Schema, damit eine
+// "saubere" Bracket-Größe (4, 8, 16...) entsteht — wenn möglich OHNE Freilose.
+//   2 Gruppen → Top 2 je Gruppe = 4 → Halbfinale
+//   3 Gruppen → Top 2 je Gruppe (6) + 2 beste Dritte = 8 → Viertelfinale
+//   4 Gruppen → Top 2 je Gruppe = 8 → Viertelfinale
+//   5 Gruppen → Top 2 je Gruppe (10) + 6 beste Dritte = 16 → Achtelfinale
+//   6 Gruppen → Top 2 je Gruppe (12) + 4 beste Dritte = 16 → Achtelfinale
+// Reicht die Anzahl Drittplatzierter nicht für eine glatte 2er-Potenz,
+// wird automatisch mit Freilosen aufgefüllt (Fallback, im Bracket sichtbar markiert).
+// ═══════════════════════════════════════════════════════════════
+function computeQualifiers(){
   const ng = S.groups.length;
-  const winners = [], runnersUp = [];
+  if(ng===0) return { seeded:[], scheme:'' };
+
+  const winners=[], runnersUp=[], thirds=[];
   S.groups.forEach((g,gi)=>{
     const st = standings(g.teams, S.groupMatches[gi]||[]);
-    if(st[0]) winners.push({team:st[0].team, fromGroup:g.name, rank:1});
-    if(st[1]) runnersUp.push({team:st[1].team, fromGroup:g.name, rank:2});
+    if(st[0]) winners.push({team:st[0].team, fromGroup:g.name, rank:1, pkt:st[0].pkt, td:st[0].td, tore:st[0].tore});
+    if(st[1]) runnersUp.push({team:st[1].team, fromGroup:g.name, rank:2, pkt:st[1].pkt, td:st[1].td, tore:st[1].tore});
+    if(st[2]) thirds.push({team:st[2].team, fromGroup:g.name, rank:3, pkt:st[2].pkt, td:st[2].td, tore:st[2].tore});
   });
+
+  const baseCount = winners.length + runnersUp.length; // Top 2 je Gruppe
+  const nextPow2FromBase = Math.pow(2, Math.ceil(Math.log2(Math.max(baseCount,1))));
+  const neededThirds = nextPow2FromBase - baseCount;
+
+  let scheme, qualThirds = [];
+  if(neededThirds === 0){
+    // Top 2 je Gruppe ergibt bereits eine glatte Bracket-Größe
+    scheme = `Die besten 2 jeder Gruppe qualifizieren sich (${baseCount} Teams → ${bracketName(nextPow2FromBase)}).`;
+  } else if(neededThirds > 0 && neededThirds <= thirds.length){
+    // Beste Drittplatzierte auffüllen, um Freilose zu vermeiden
+    thirds.sort((a,b)=> b.pkt-a.pkt || b.td-a.td || b.tore-a.tore);
+    qualThirds = thirds.slice(0, neededThirds).map(t=>({...t, isBestThird:true}));
+    scheme = `Die besten 2 jeder Gruppe + die ${neededThirds} besten Gruppendritten qualifizieren sich (${baseCount+neededThirds} Teams → ${bracketName(nextPow2FromBase)}, keine Freilose).`;
+  } else {
+    // Zu wenige Dritte verfügbar (z.B. sehr viele Gruppen) — Freilose als Fallback
+    scheme = `Die besten 2 jeder Gruppe qualifizieren sich (${baseCount} Teams). Nicht genug Drittplatzierte für eine glatte Runde — es entstehen Freilose.`;
+  }
+
+  // Setzliste: über Kreuz, Sieger vs. Zweiter der nächsten Gruppe, beste Dritte am Ende eingestreut
   const seeded = [];
   for(let i=0;i<ng;i++){
     const w = winners[i];
-    const r = runnersUp[(i+1)%ng]; // Zweiter der NÄCHSTEN Gruppe (über Kreuz)
+    const r = runnersUp[(i+1)%ng];
     if(w) seeded.push(w);
     if(r) seeded.push(r);
   }
+  seeded.push(...qualThirds);
+
+  return { seeded, scheme, baseCount, neededThirds, thirdsAvailable: thirds.length };
+}
+
+function bracketName(size){
+  const names = {2:'Finale',4:'Halbfinale',8:'Viertelfinale',16:'Achtelfinale',32:'1/16-Finale'};
+  return names[size] || `${size}er-Runde`;
+}
+
+function buildKO(){
+  const { seeded } = computeQualifiers();
   S.koRounds=mkBracket(seeded);
 
   // KO-Zeitplan: automatisch ab Ende der Gruppenphase, jede Runde nacheinander
@@ -1407,9 +1458,16 @@ function latestMatchEnd(matches, matchDuration, numFields, startTime){
   return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
 }
 function mkBracket(q){
-  const n=q.length, sz=Math.pow(2,Math.ceil(Math.log2(n)));
+  const n=q.length, sz=Math.pow(2,Math.ceil(Math.log2(Math.max(n,1))));
   const p=[...q]; while(p.length<sz)p.push({team:'Freilos'});
-  const names={2:'Finale',4:'Halbfinale',8:'Viertelfinale',16:'Achtelfinale'};
+  const names={2:'Finale',4:'Halbfinale',8:'Viertelfinale',16:'Achtelfinale',32:'1/16-Finale'};
+  const originLabel = (t) => {
+    if(!t || !t.fromGroup) return null;
+    if(t.isBestThird) return `Bester 3. (Gr. ${t.fromGroup})`;
+    if(t.rank===1) return `Sieger Gr. ${t.fromGroup}`;
+    if(t.rank===2) return `2. Gr. ${t.fromGroup}`;
+    return `Gr. ${t.fromGroup}`;
+  };
   const rounds=[]; let cur=p,ri=0;
   while(cur.length>1){
     const ms=[];
@@ -1419,8 +1477,8 @@ function mkBracket(q){
       ms.push({
         id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,
         winner:isF?(t1!=='Freilos'?t1:t2):null,isFrei:isF,events:[],
-        homeOrigin: ri===0 && cur[i]?.fromGroup ? `Sieger Gr. ${cur[i].fromGroup}` : (cur[i]?.fromGroup ? `2. Gr. ${cur[i].fromGroup}` : null),
-        awayOrigin: ri===0 && cur[i+1]?.fromGroup ? (cur[i+1]?.rank===1?`Sieger Gr. ${cur[i+1].fromGroup}`:`2. Gr. ${cur[i+1].fromGroup}`) : null
+        homeOrigin: ri===0 ? originLabel(cur[i]) : null,
+        awayOrigin: ri===0 ? originLabel(cur[i+1]) : null
       });
     }
     rounds.push({name:names[cur.length]||'Runde '+(ri+1),matches:ms});
@@ -1640,8 +1698,36 @@ function renderTree(){
     });
     html += '</div>'; // tree-ko-rounds
     html += '</div>'; // card
+  } else if(S.phase==='group') {
+    // ── LIVE-VORSCHAU der KO-Runde (basierend auf aktuellem, vorläufigem Tabellenstand) ──
+    const { seeded, scheme } = computeQualifiers();
+    if(seeded.length >= 2){
+      const previewRounds = mkBracket(seeded);
+      html += '<div class="card" style="border-left:4px solid var(--orange);">';
+      html += '<div class="tree-phase-lbl" style="background:var(--orange);">🔮 KO-Runde — Live-Vorschau (vorläufig)</div>';
+      html += `<p style="font-size:12px;color:var(--muted);margin-bottom:12px;">${esc(scheme)} Diese Vorschau basiert auf dem <strong>aktuellen Tabellenstand</strong> und ändert sich, sobald sich Gruppenspiele-Ergebnisse ändern. Sie wird erst verbindlich, wenn die Gruppenphase abgeschlossen und „KO-Runde generieren" geklickt wird.</p>`;
+      html += '<div class="tree-ko-rounds">';
+      previewRounds.forEach((r,ri)=>{
+        html += `<div class="tree-ko-col"><div class="tree-ko-col-title">${ri===previewRounds.length-1?'🏆 ':''}${esc(r.name)}</div>`;
+        r.matches.forEach(m=>{
+          if(m.isFrei){
+            const t = m.home!=='Freilos'?m.home:m.away;
+            html += `<div class="tree-ko-match freilos-card">${esc(t)} — Freilos</div>`;
+            return;
+          }
+          html += `<div class="tree-ko-match" style="opacity:0.85;">
+            <div class="tkm-row"><span class="tkm-team${m.home==='?'?' placeholder':''}">${esc(m.home)}${m.homeOrigin?`<span class="tkm-origin">${esc(m.homeOrigin)}</span>`:''}</span></div>
+            <div class="tkm-row"><span class="tkm-team${m.away==='?'?' placeholder':''}">${esc(m.away)}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span></div>
+          </div>`;
+        });
+        html += '</div>';
+      });
+      html += '</div></div>';
+    } else {
+      html += '<div class="card"><div class="tree-phase-lbl">KO-Runde</div><p style="color:var(--muted);font-size:13px;">Noch nicht genug Gruppenspiele für eine Vorschau.</p></div>';
+    }
   } else {
-    html += '<div class="card"><div class="tree-phase-lbl">KO-Runde</div><p style="color:var(--muted);font-size:13px;">Wird nach Abschluss der Gruppenphase generiert (1. und 2. jeder Gruppe qualifizieren sich).</p></div>';
+    html += '<div class="card"><div class="tree-phase-lbl">KO-Runde</div><p style="color:var(--muted);font-size:13px;">Wird nach Abschluss der Gruppenphase generiert.</p></div>';
   }
 
   el.innerHTML = html;
