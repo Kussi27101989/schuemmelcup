@@ -1043,55 +1043,163 @@ function standings(teams,matches,tb){
     if(hg>ag){h.g++;h.pkt+=3;a.v++;}else if(hg<ag){a.g++;a.pkt+=3;h.v++;}else{h.u++;a.u++;h.pkt++;a.pkt++;}
   });
   teams.forEach(t=>st[t].td=st[t].tore-st[t].gegen);
-  function h2h(at,bt){
-    const s={[at]:{pkt:0,td:0,tore:0},[bt]:{pkt:0,td:0,tore:0}};
+
+  // "Mini-Tabelle": Wertung NUR aus den Spielen zwischen den übergebenen Teams.
+  // Wird für den direkten Vergleich bei Punktgleichheit von 2 ODER MEHR Teams
+  // genutzt (korrekt & transitiv) — anders als der frühere paarweise Vergleich,
+  // der bei 3er-Gleichstand (Ringschluss A>B>C>A) widersprüchliche bzw. vom
+  // Sortier-Algorithmus abhängige Reihenfolgen liefern konnte.
+  function miniTable(group){
+    const set=new Set(group), mt={};
+    group.forEach(t=>mt[t]={pkt:0,td:0,tore:0});
     matches.forEach(m=>{
       if(m.h===''||m.a==='') return;
-      if(!((m.home===at&&m.away===bt)||(m.home===bt&&m.away===at))) return;
+      if(!set.has(m.home)||!set.has(m.away)) return;
       const hg=+m.h,ag=+m.a;
-      s[m.home].tore+=hg;s[m.home].td+=hg-ag;s[m.away].tore+=ag;s[m.away].td+=ag-hg;
-      if(hg>ag)s[m.home].pkt+=3;else if(hg<ag)s[m.away].pkt+=3;else{s[m.home].pkt++;s[m.away].pkt++;}
+      mt[m.home].tore+=hg; mt[m.home].td+=hg-ag;
+      mt[m.away].tore+=ag; mt[m.away].td+=ag-hg;
+      if(hg>ag)mt[m.home].pkt+=3; else if(ag>hg)mt[m.away].pkt+=3; else {mt[m.home].pkt++; mt[m.away].pkt++;}
     });
-    return s;
+    return mt;
   }
+
   const arr=Object.values(st);
-  arr.sort((a,b)=>{
-    if(b.pkt!==a.pkt) return b.pkt-a.pkt;
+  arr.sort((a,b)=>b.pkt-a.pkt); // 1) strikt nach Punkten
+  // 2) Blöcke punktgleicher Teams getrennt nach gewähltem Tiebreaker auflösen
+  const out=[]; let i=0;
+  while(i<arr.length){
+    let j=i; while(j<arr.length && arr[j].pkt===arr[i].pkt) j++;
+    const block=arr.slice(i,j);
+    if(block.length>1) resolveBlock(block);
+    out.push(...block);
+    i=j;
+  }
+  return out;
+
+  function resolveBlock(block){
+    const mt=miniTable(block.map(x=>x.team));
     if(tb==='direkt'){
-      const dv=h2h(a.team,b.team);
-      if(dv[b.team].pkt!==dv[a.team].pkt) return dv[b.team].pkt-dv[a.team].pkt;
-      if(dv[b.team].td!==dv[a.team].td)   return dv[b.team].td-dv[a.team].td;
-      if(dv[b.team].tore!==dv[a.team].tore) return dv[b.team].tore-dv[a.team].tore;
-      if(b.td!==a.td) return b.td-a.td; return b.tore-a.tore;
+      // Punkte → direkter Vergleich → Tordiff (gesamt) → Tore (gesamt)
+      block.sort((a,b)=>{
+        const A=mt[a.team], B=mt[b.team];
+        if(B.pkt!==A.pkt) return B.pkt-A.pkt;
+        if(B.td!==A.td)   return B.td-A.td;
+        if(B.tore!==A.tore) return B.tore-A.tore;
+        if(b.td!==a.td)   return b.td-a.td;
+        return b.tore-a.tore;
+      });
     } else {
-      if(b.td!==a.td) return b.td-a.td; if(b.tore!==a.tore) return b.tore-a.tore;
-      const dv=h2h(a.team,b.team);
-      if(dv[b.team].pkt!==dv[a.team].pkt) return dv[b.team].pkt-dv[a.team].pkt;
-      return 0;
+      // Punkte → Tordiff (gesamt) → Tore (gesamt) → direkter Vergleich
+      block.sort((a,b)=>{
+        if(b.td!==a.td)   return b.td-a.td;
+        if(b.tore!==a.tore) return b.tore-a.tore;
+        const A=mt[a.team], B=mt[b.team];
+        if(B.pkt!==A.pkt) return B.pkt-A.pkt;
+        if(B.td!==A.td)   return B.td-A.td;
+        return B.tore-A.tore;
+      });
     }
-  });
-  return arr;
+  }
 }
 function tblHTML(teams,matches,grpName){
   const rows=standings(teams,matches);
+  const qSet = currentQualifierSet(); // Top 2 + ggf. beste Dritte (nach aktuellem Stand)
   const note=S.tiebreaker==='direkt'?'Tiebreaker: Punkte → Dir.Vgl. → Tordiff. → Tore':'Tiebreaker: Punkte → Tordiff. → Tore → Dir.Vgl.';
   let h=`<div class="standings-wrap"><div class="group-lbl">Gruppe ${grpName}</div>
     <table><thead><tr><th>#</th><th></th><th style="text-align:left">Team</th><th>Sp</th><th>G</th><th>U</th><th>V</th><th>Tore</th><th>TD</th><th>Pkt</th></tr></thead><tbody>`;
   rows.forEach((r,i)=>{
     const mine=activeTeam&&r.team===activeTeam;
-    const qualified = i<2;
+    // Qualifiziert = Top 2 ODER (als bester Dritter ins Set aufgenommen).
+    // Dritte werden zusätzlich als solche markiert, damit Tabelle und KO-Baum
+    // nicht widersprechen (vorher zeigte die Tabelle nur i<2, der Baum aber
+    // ggf. auch einen Gruppendritten als qualifiziert).
+    const isThird = i===2 && qSet.has(r.team);
+    const qualified = i<2 || isThird;
     const cls=[i===0?'top':i%2===0?'even':'',mine?'mine':''].join(' ');
     const td=r.td>0?'+'+r.td:r.td;
     const tdcls=r.td>0?'tdp':r.td<0?'tdn':'';
-    const fw = qualified ? '800' : '600'; // Platz 1+2 fett
+    const fw = qualified ? '800' : '600';
     h+=`<tr class="${cls}"><td style="font-weight:700;color:${qualified?'var(--green)':'var(--muted)'}">${i+1}</td>
-      <td class="q-col">${qualified?'<span class="q-badge">Q</span>':''}</td>
+      <td class="q-col">${qualified?`<span class="q-badge"${isThird?' title="bester Gruppendritter" style="background:var(--orange);"':''}>Q</span>`:''}</td>
       <td class="tn" style="font-weight:${fw};">${esc(r.team)}${mine?' 👤':''}</td>
       <td>${r.sp}</td><td>${r.g}</td><td>${r.u}</td><td>${r.v}</td>
       <td>${r.tore}:${r.gegen}</td><td class="${tdcls}">${td}</td><td class="pkt">${r.pkt}</td></tr>`;
   });
-  h+=`</tbody></table><div class="tbl-note">Q = qualifiziert für die KO-Runde · ${note}</div></div>`;
+  h+=`</tbody></table><div class="tbl-note">Q = qualifiziert für die KO-Runde (orange = bester Dritter) · ${note}</div></div>`;
   return h;
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MATCH-/ERGEBNIS-HELFER (KO-Sieger inkl. Elfmeterschießen, Qualifikation)
+// ═══════════════════════════════════════════════════════════════
+// Ermittelt Sieger/Verlierer eines KO- oder Platzierungsspiels.
+// Bei Unentschieden nach regulärer Spielzeit entscheidet das Elfmeterschießen
+// (m.hp / m.ap). Solange das Elfmeter-Ergebnis fehlt oder ebenfalls gleich ist,
+// gibt es noch KEINEN Sieger (return null) — es zieht also auch niemand fälschlich
+// weiter. (Früher gewann bei jedem Remis automatisch das Auswärtsteam — Bug.)
+function koResult(m){
+  if(m.h===''||m.a==='') return null;
+  const hg=+m.h, ag=+m.a;
+  if(hg>ag) return {winner:m.home, loser:m.away};
+  if(ag>hg) return {winner:m.away, loser:m.home};
+  if(m.hp==null||m.hp===''||m.ap==null||m.ap==='') return null; // Remis, Elfmeter fehlen
+  const hp=+m.hp, ap=+m.ap;
+  if(hp>ap) return {winner:m.home, loser:m.away};
+  if(ap>hp) return {winner:m.away, loser:m.home};
+  return null; // auch Elfmeter gleich → weiterhin offen
+}
+function isDrawScore(m){ return m.h!==''&&m.a!==''&&+m.h===+m.a; }
+function hasPens(m){ return m.hp!=null&&m.hp!==''&&m.ap!=null&&m.ap!==''; }
+// Ergebnis-Text, ergänzt um "(x:y n.E.)" bei Elfmeterentscheidung
+function scoreText(m){
+  if(m.h===''||m.a==='') return '–:–';
+  let s = m.h+':'+m.a;
+  if(isDrawScore(m) && hasPens(m)) s += ` (${m.hp}:${m.ap} n.E.)`;
+  return s;
+}
+
+// Liefert die Menge der Teams, die NACH AKTUELLEM Tabellenstand qualifiziert wären
+// (Top 2 je Gruppe + ggf. beste Gruppendritte) — als Echtnamen-Set für die "Q"-
+// Markierung in den Gruppentabellen. Gleiche Logik wie computeQualifiers().
+function currentQualifierSet(){
+  const winners=[], runners=[], thirds=[];
+  S.groups.forEach((g,gi)=>{
+    const st = standings(g.teams, S.groupMatches[gi]||[]);
+    if(st[0]) winners.push(st[0].team);
+    if(st[1]) runners.push(st[1].team);
+    if(st[2]) thirds.push({team:st[2].team, pkt:st[2].pkt, td:st[2].td, tore:st[2].tore});
+  });
+  const set = new Set([...winners, ...runners]);
+  const base = winners.length + runners.length;
+  const sz = Math.pow(2, Math.ceil(Math.log2(Math.max(base,1))));
+  const need = sz - base;
+  if(need>0 && need<=thirds.length){
+    thirds.sort((a,b)=> b.pkt-a.pkt || b.td-a.td || b.tore-a.tore);
+    thirds.slice(0,need).forEach(t=>set.add(t.team));
+  }
+  return set;
+}
+
+// Round-Robin nach der "Kreismethode": pro Spielrunde spielt jedes Team höchstens
+// einmal. Flach in Runden-Reihenfolge ausgegeben → kein Team spielt mehrere Spiele
+// direkt hintereinander (faire Pausenverteilung, gerade für Alte Herren wichtig).
+// (Vorher: naive Doppelschleife — Team A spielte die ersten N Spiele am Stück.)
+function roundRobinRounds(teams){
+  const ts = teams.slice();
+  if(ts.length % 2 !== 0) ts.push(null); // Dummy bei ungerader Teamzahl (= Runde spielfrei)
+  const n = ts.length;
+  const arr = ts.slice();
+  const rounds = [];
+  for(let r=0; r<n-1; r++){
+    const round = [];
+    for(let i=0;i<n/2;i++){
+      const a = arr[i], b = arr[n-1-i];
+      if(a!==null && b!==null) round.push([a,b]);
+    }
+    rounds.push(round);
+    arr.splice(1,0,arr.pop()); // ersten Platz fixieren, Rest rotieren
+  }
+  return rounds;
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1216,6 +1324,17 @@ function mcHTML(m, saveFn, showQRBtn=false){
   const evList = eventsListHTML(m, eventsEditable);
   const evAddBox = eventsEditable ? addEventBoxHTML(m) : '';
 
+  // Bei KO-/Platzierungsspielen kann ein Spiel nicht unentschieden enden — dafür
+  // gibt es ein Elfmeterschießen-Feld (nur bei Gleichstand auszufüllen).
+  const isKO = saveFn==='saveKO';
+  const penHTML = isKO ? `
+      <div class="ef-row" style="margin-top:-2px;">
+        <div class="ef-field"><label>Elfm. ${esc(m.home)}</label><input type="number" min="0" class="si" id="hp-${m.id}" value="${m.hp??''}" placeholder="–"></div>
+        <div style="font-size:20px;font-weight:800;color:var(--muted);padding-bottom:6px;">:</div>
+        <div class="ef-field"><label>Elfm. ${esc(m.away)}</label><input type="number" min="0" class="si" id="ap-${m.id}" value="${m.ap??''}" placeholder="–"></div>
+        <div class="ef-field" style="flex:2;display:flex;align-items:flex-end;"><span style="font-size:11px;color:var(--muted);line-height:1.3;">⚽ Nur bei Unentschieden ausfüllen<br>(Elfmeterschießen entscheidet)</span></div>
+      </div>` : '';
+
   const efHTML = canEdit ? `
     <div class="ef" id="ef-${m.id}">
       <div class="ef-row">
@@ -1224,6 +1343,7 @@ function mcHTML(m, saveFn, showQRBtn=false){
         <div class="ef-field"><label>${esc(m.away)}</label><input type="number" min="0" class="si" id="a-${m.id}" value="${m.a}" placeholder="0"></div>
         <div class="ef-field"><label>Anstoßzeit</label><input type="time" id="t-${m.id}" value="${m.time||''}"></div>
       </div>
+      ${penHTML}
       <div class="emsg" id="em-${m.id}"></div>
       <div style="display:flex;gap:8px;margin-bottom:4px;">
         <button class="btn-save" onclick="${saveFn}('${m.id}')">Speichern 🔒</button>
@@ -1237,7 +1357,7 @@ function mcHTML(m, saveFn, showQRBtn=false){
   return `<div class="${cardCls}" id="mc-${m.id}">
     <div class="mc-row">
       <div class="mc-team${homeHl}">${esc(m.home)}</div>
-      <div class="mc-score${played?' played':''}">${played?m.h+' : '+m.a:'– : –'}</div>
+      <div class="mc-score${played?' played':''}">${played?(m.h+' : '+m.a+((isDrawScore(m)&&hasPens(m))?` <span style="font-size:.6em;color:var(--muted);vertical-align:middle;">(${m.hp}:${m.ap} n.E.)</span>`:'')):'– : –'}</div>
       <div class="mc-team away${awayHl}">${esc(m.away)}</div>
     </div>
     <div class="mc-meta">
@@ -1258,20 +1378,34 @@ function toggleEF(id){ document.getElementById('ef-'+id)?.classList.toggle('open
 // ═══════════════════════════════════════════════════════════════
 // SAVE MATCH → locks immediately
 // ═══════════════════════════════════════════════════════════════
-function doSave(id, pool, afterFn){
+function doSave(id, pool, afterFn, isKO=false){
   const h=document.getElementById('h-'+id)?.value??'';
   const a=document.getElementById('a-'+id)?.value??'';
   const t=document.getElementById('t-'+id)?.value??'';
   const em=document.getElementById('em-'+id);
+  const fail=(msg)=>{ em.textContent=msg; em.style.display='block'; };
   em.style.display='none';
-  if(h===''||a===''){ em.textContent='Bitte beide Tore eingeben.'; em.style.display='block'; return; }
+  if(h===''||a===''){ fail('Bitte beide Tore eingeben.'); return; }
+  // Tore müssen ganze Zahlen ≥ 0 sein (verhindert "abc"/"-1"/"2.5" → NaN in der Tabelle)
+  if(!/^\d+$/.test(h)||!/^\d+$/.test(a)){ fail('Tore müssen ganze Zahlen ≥ 0 sein.'); return; }
+
+  // Elfmeterschießen nur bei KO-/Platzierungsspielen mit Gleichstand
+  let hp='', ap='';
+  if(isKO && +h===+a){
+    hp=document.getElementById('hp-'+id)?.value??'';
+    ap=document.getElementById('ap-'+id)?.value??'';
+    if(hp===''||ap===''){ fail('Unentschieden in der KO-Runde: bitte Elfmeterschießen-Ergebnis eintragen.'); return; }
+    if(!/^\d+$/.test(hp)||!/^\d+$/.test(ap)){ fail('Elfmeter müssen ganze Zahlen ≥ 0 sein.'); return; }
+    if(+hp===+ap){ fail('Ein Elfmeterschießen kann nicht unentschieden enden.'); return; }
+  }
+
   const m=pool.find(x=>x.id===id);
   if(!m) return;
   if(!localAdminUnlocked){
-    if(!activeTeam){ em.textContent='Bitte zuerst als Team einloggen.'; em.style.display='block'; return; }
-    if(m.home!==activeTeam&&m.away!==activeTeam){ em.textContent='Du kannst nur Spiele deines Teams eintragen.'; em.style.display='block'; return; }
+    if(!activeTeam){ fail('Bitte zuerst als Team einloggen.'); return; }
+    if(m.home!==activeTeam&&m.away!==activeTeam){ fail('Du kannst nur Spiele deines Teams eintragen.'); return; }
   }
-  Object.assign(m,{h,a,time:t,locked:true});
+  Object.assign(m,{h,a,time:t,locked:true,hp,ap});
   afterFn();
   save();
   const ok=document.getElementById('ok-'+id);
@@ -1282,7 +1416,7 @@ function saveGM(id){
   for(const gi in S.groupMatches){
     const m=S.groupMatches[gi].find(x=>x.id===id);
     if(m){
-      doSave(id,S.groupMatches[gi],()=>{});
+      doSave(id,S.groupMatches[gi],()=>{},false);
       checkAutoGenerateKO();
       return;
     }
@@ -1303,11 +1437,11 @@ function checkAutoGenerateKO(){
 function saveKO(id){
   for(const ri in S.koRounds){
     const m=S.koRounds[ri].matches.find(x=>x.id===id);
-    if(m){ doSave(id,S.koRounds[ri].matches,()=>propKO()); return; }
+    if(m){ doSave(id,S.koRounds[ri].matches,()=>propKO(),true); return; }
   }
   for(const pg of (S.placementGames||[])){
     const m=pg.matches.find(x=>x.id===id);
-    if(m){ doSave(id,pg.matches,()=>propKO()); return; }
+    if(m){ doSave(id,pg.matches,()=>propKO(),true); return; }
   }
 }
 function unlockMatch(id){
@@ -1321,8 +1455,9 @@ function unlockMatch(id){
 // ═══════════════════════════════════════════════════════════════
 function genMatches(teams){
   const ms=[];
-  for(let i=0;i<teams.length;i++) for(let j=i+1;j<teams.length;j++)
-    ms.push({id:uid(),home:teams[i],away:teams[j],h:'',a:'',time:'',locked:false,winner:null,events:[]});
+  roundRobinRounds(teams).forEach(round=>round.forEach(([home,away])=>{
+    ms.push({id:uid(),home,away,h:'',a:'',time:'',locked:false,winner:null,loser:null,isFrei:false,events:[],hp:'',ap:''});
+  }));
   return ms;
 }
 
@@ -1682,21 +1817,21 @@ function buildKO(){
     };
     const allGM = Object.values(S.groupMatches).flat();
     let nextStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+    const roundEndTime = {}; // Rundenname → tatsächliche Endzeit dieser Runde
     S.koRounds.forEach(round=>{
       const playable = round.matches.filter(m=>!m.isFrei);
       const dur = durationForRound(round.name);
       scheduleMatchList(playable, nextStart, dur, sched.fieldsKO);
-      nextStart = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
+      const end = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
+      roundEndTime[round.name] = end;
+      nextStart = end;
     });
-    // Platzierungsspiele zeitlich nach der jeweiligen Quellrunde einplanen,
-    // parallel zur nächsten regulären Runde (gleiches Zeitfenster, eigenes Feld i.d.R.)
+    // Platzierungsspiele NACH dem tatsächlichen Ende der jeweiligen Quellrunde einplanen.
+    // (Vorher wurde als Startzeit fälschlich die erste Anstoßzeit genutzt — dadurch
+    // landeten z.B. "Spiel um Platz 3" mitten in der Gruppenphase.)
     (S.placementGames||[]).forEach(pg=>{
-      const sourceRoundIdx = S.koRounds.findIndex(r=>r.name===pg.sourceRound);
-      if(sourceRoundIdx<0) return;
-      const sourceEnd = latestMatchEnd(
-        S.koRounds[sourceRoundIdx].matches.filter(m=>!m.isFrei),
-        durationForRound(pg.sourceRound), sched.fieldsKO, sched.firstTime
-      );
+      const sourceEnd = roundEndTime[pg.sourceRound];
+      if(!sourceEnd) return;
       const dur = durationForRound(pg.label);
       scheduleMatchList(pg.matches, sourceEnd, dur, sched.fieldsKO);
     });
@@ -1716,8 +1851,17 @@ function latestMatchEnd(matches, matchDuration, numFields, startTime){
   return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
 }
 function mkBracket(q){
-  const n=q.length, sz=Math.pow(2,Math.ceil(Math.log2(Math.max(n,1))));
-  const p=[...q]; while(p.length<sz)p.push({team:'Freilos'});
+  const real=[...q];
+  const n=real.length, sz=Math.pow(2,Math.ceil(Math.log2(Math.max(n,1))));
+  const numByes=sz-n;
+  // Freilose bewusst verteilen statt hinten anzuhängen: sie werden den oberen
+  // Setzplätzen zugeordnet und treffen NIE aufeinander. (Vorher konnten zwei
+  // Freilose gepaart werden — dann zog ein Phantom-"Freilos" als Sieger weiter.)
+  // numByes ist konstruktionsbedingt immer < sz/2, daher ist das stets möglich;
+  // (n - numByes) ist gerade, die übrigen echten Teams paaren also sauber.
+  const p=[];
+  for(let k=0;k<numByes;k++){ p.push(real[k]); p.push({team:'Freilos'}); }
+  for(let k=numByes;k<n;k++){ p.push(real[k]); }
   const names={2:'Finale',4:'Halbfinale',8:'Viertelfinale',16:'Achtelfinale',32:'1/16-Finale'};
   const originLabel = (t) => {
     if(!t || !t.fromGroup) return null;
@@ -1738,7 +1882,7 @@ function mkBracket(q){
       const t2 = cur[i+1]?.team || (origin2 || '?');
       const isF=t1==='Freilos'||t2==='Freilos';
       ms.push({
-        id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,
+        id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,hp:'',ap:'',
         winner:isF?(t1!=='Freilos'?t1:t2):null,loser:null,isFrei:isF,events:[],
         // Origin nur als Untertitel zeigen, wenn der Hauptname bereits ein echter Teamname ist
         // (sonst wäre es doppelt, weil der Origin-Text schon die Hauptanzeige ist)
@@ -1793,15 +1937,28 @@ function generatePlacementGames(){
 }
 
 function propKO(){
+  // Sieger/Verlierer aus dem Ergebnis ableiten — bei Remis via Elfmeterschießen.
+  // koResult() liefert null, wenn (noch) kein Sieger feststeht; dann wird winner
+  // bewusst zurückgesetzt, damit kein veralteter Sieger weiterzieht (z.B. nach
+  // einer Korrektur, die ein Spiel wieder ins Unentschieden zurückführt).
   S.koRounds.forEach(r=>r.matches.forEach(m=>{
-    if(m.h!==''&&m.a!==''&&!m.isFrei){
-      m.winner=+m.h>+m.a?m.home:m.away;
-      m.loser=+m.h>+m.a?m.away:m.home;
-    }
+    if(m.isFrei) return;
+    const res = koResult(m);
+    m.winner = res ? res.winner : null;
+    m.loser  = res ? res.loser  : null;
   }));
   for(let ri=0;ri<S.koRounds.length-1;ri++){
     const cur=S.koRounds[ri],nxt=S.koRounds[ri+1];
-    cur.matches.forEach((m,mi)=>{ const sl=Math.floor(mi/2),ih=mi%2===0; if(sl<nxt.matches.length&&m.winner){ if(ih)nxt.matches[sl].home=m.winner; else nxt.matches[sl].away=m.winner; } });
+    cur.matches.forEach((m,mi)=>{
+      const sl=Math.floor(mi/2), ih=mi%2===0;
+      if(sl>=nxt.matches.length) return;
+      // Sieger eintragen — oder Slot wieder auf "?" zurücksetzen, wenn der Sieger
+      // (noch) nicht feststeht. Bereits gespielte Folgespiele werden nicht überschrieben.
+      const slot = ih ? 'home' : 'away';
+      if(nxt.matches[sl].h==='' && nxt.matches[sl].a===''){
+        nxt.matches[sl][slot] = m.winner || '?';
+      }
+    });
   }
   propagateToPlacementGames();
 }
@@ -1980,7 +2137,7 @@ function exportSchedulePDF(){
   allGroupMatches.sort((a,b)=> (a.time||'').localeCompare(b.time||'') || (a.field||0)-(b.field||0));
   allGroupMatches.forEach(m=>{
     const played = m.h!==''&&m.a!=='';
-    html += `<tr><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.grp)}</td><td>${esc(m.home)}</td><td>${played?m.h+':'+m.a:'–:–'}</td><td>${esc(m.away)}</td></tr>`;
+    html += `<tr><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.grp)}</td><td>${esc(m.home)}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(m.away)}</td></tr>`;
   });
   html += `</tbody></table>`;
 
@@ -1991,7 +2148,7 @@ function exportSchedulePDF(){
       r.matches.forEach(m=>{
         if(m.isFrei) return;
         const played = m.h!==''&&m.a!=='';
-        html += `<tr><td>${esc(r.name)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td class="${m.winner===m.home?'win':''}">${esc(m.home)}</td><td>${played?m.h+':'+m.a:'–:–'}</td><td class="${m.winner===m.away?'win':''}">${esc(m.away)}</td></tr>`;
+        html += `<tr><td>${esc(r.name)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td class="${m.winner===m.home?'win':''}">${esc(m.home)}</td><td>${played?scoreText(m):'–:–'}</td><td class="${m.winner===m.away?'win':''}">${esc(m.away)}</td></tr>`;
       });
     });
     html += `</tbody></table>`;
@@ -2003,7 +2160,7 @@ function exportSchedulePDF(){
     S.placementGames.forEach(pg=>{
       pg.matches.forEach(m=>{
         const played = m.h!==''&&m.a!=='';
-        html += `<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.home)}</td><td>${played?m.h+':'+m.a:'–:–'}</td><td>${esc(m.away)}</td></tr>`;
+        html += `<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.home)}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(m.away)}</td></tr>`;
       });
     });
     html += `</tbody></table>`;
@@ -2036,20 +2193,20 @@ function buildKOPreviewWithTiming(){
 
   const allGM = Object.values(S.groupMatches).flat();
   let nextStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+  const roundEndTime = {};
   previewKO.forEach(round=>{
     const playable = round.matches.filter(m=>!m.isFrei);
     const dur = durationForRound(round.name);
     scheduleMatchList(playable, nextStart, dur, sched.fieldsKO);
-    nextStart = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
+    const end = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
+    roundEndTime[round.name] = end;
+    nextStart = end;
   });
 
   // Platzierungsspiele-Vorschau (mit Platzhaltern, da Verlierer noch nicht feststehen)
   const placementOpts = availablePlacementOptions(previewKO).filter(o => (S.placement?.selected||[]).includes(o.key));
   const previewPlacements = placementOpts.map(opt=>{
-    const sourceRoundIdx = previewKO.findIndex(r=>r.name===opt.sourceRound);
-    const sourceEnd = sourceRoundIdx>=0
-      ? latestMatchEnd(previewKO[sourceRoundIdx].matches.filter(m=>!m.isFrei), durationForRound(opt.sourceRound), sched.fieldsKO, sched.firstTime)
-      : sched.firstTime;
+    const sourceEnd = roundEndTime[opt.sourceRound] || nextStart;
     const matches = [];
     for(let i=0;i<opt.numGames;i++){
       matches.push({id:'preview_'+opt.key+'_'+i, home:`Verlierer ${opt.sourceRound}`, away:`Verlierer ${opt.sourceRound}`, h:'', a:'', time:'', locked:false, isFrei:false});
@@ -2103,7 +2260,7 @@ function renderTree(){
           const m = byTime[t].find(x=>(x.field||1)===f);
           if(m){
             const played = m.h!==''&&m.a!=='';
-            html += `<td style="text-align:left;font-size:12px;">${esc(m.home)} – ${esc(m.away)}${played?` <strong>(${m.h}:${m.a})</strong>`:''}<br><span style="color:var(--muted);font-size:10px;">${esc(m.phase)}</span></td>`;
+            html += `<td style="text-align:left;font-size:12px;">${esc(m.home)} – ${esc(m.away)}${played?` <strong>(${scoreText(m)})</strong>`:''}<br><span style="color:var(--muted);font-size:10px;">${esc(m.phase)}</span></td>`;
           } else html += '<td></td>';
         }
         html += '</tr>';
@@ -2130,7 +2287,7 @@ function renderTree(){
         const awayWin = played && +m.a > +m.h;
         html += `<div class="tree-match-line">
           <span class="tml-team${homeWin?' win':''}">${esc(m.home)}</span>
-          <span class="tml-score">${played?m.h+':'+m.a:'–:–'}</span>
+          <span class="tml-score">${played?scoreText(m):'–:–'}</span>
           <span class="tml-team${awayWin?' win':''}" style="text-align:right;">${esc(m.away)}</span>
           <span class="tml-time">${m.time||''}${m.field?' · F'+m.field:''}</span>
         </div>`;
@@ -2155,8 +2312,11 @@ function renderTree(){
           return;
         }
         const played = m.h!==''&&m.a!=='';
-        const homeWin = played && +m.h > +m.a;
-        const awayWin = played && +m.a > +m.h;
+        // Sieger inkl. Elfmeterschießen — nicht nur Tore vergleichen (sonst würde
+        // ein per Elfmeter entschiedenes Remis gar nicht hervorgehoben).
+        const homeWin = m.winner && m.winner===m.home;
+        const awayWin = m.winner && m.winner===m.away;
+        const penTxt = (isDrawScore(m) && hasPens(m)) ? ` <span style="font-size:10px;color:var(--muted);">(${m.hp}:${m.ap} n.E.)</span>` : '';
         const homeIsPlaceholder = m.home==='?';
         const awayIsPlaceholder = m.away==='?';
         html += `<div class="tree-ko-match${played?' has-winner':''}">
@@ -2166,7 +2326,7 @@ function renderTree(){
           </div>
           <div class="tkm-row">
             <span class="tkm-team${awayWin?' win':''}${awayIsPlaceholder?' placeholder':''}">${esc(m.away)}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span>
-            ${played?`<span class="tkm-score">${m.a}</span>`:''}
+            ${played?`<span class="tkm-score">${m.a}${penTxt}</span>`:''}
           </div>
           ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}${m.field?' · Feld '+m.field:''}</div>`:''}
         </div>`;
