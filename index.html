@@ -494,7 +494,8 @@ function dflt(){
   };
 }
 let S = dflt();
-let activeTeam = null; // never persisted — cleared on every page load
+const ATK = 'schuemmelcup_active_team'; // localStorage: eingeloggtes Team (pro Browser/Gerät)
+let activeTeam = localStorage.getItem(ATK) || null;
 
 function newTournamentId(){
   return 'tk_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
@@ -526,6 +527,17 @@ function connectToTournament(id, isNew=false, initialState=null){
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
     updateTournamentNameDisplay();
+    // Falls bereits ein Team eingeloggt war (z.B. nach Reload): Banner wiederherstellen,
+    // aber nur falls dieses Team auch wirklich noch im aktuellen Turnier existiert.
+    if(activeTeam && allTeams().includes(activeTeam)){
+      const banner = document.getElementById('team-banner');
+      banner.style.display='flex';
+      document.getElementById('tb-name').textContent = activeTeam;
+    } else if(activeTeam){
+      // Team gehört nicht (mehr) zu diesem Turnier — Login zurücksetzen
+      activeTeam = null;
+      localStorage.removeItem(ATK);
+    }
     renderAll();
   }, err => {
     console.error('Firebase Lesefehler:', err);
@@ -557,6 +569,7 @@ function disconnectTournament(){
   TID = null;
   localStorage.removeItem(LK);
   activeTeam = null;
+  localStorage.removeItem(ATK);
   document.getElementById('team-banner').style.display='none';
   showTournamentGate();
 }
@@ -690,10 +703,12 @@ function initApp(){
 
   if(joinId){
     fbdb.ref('tournaments/'+joinId+'/meta').once('value').then(snap=>{
+      // URL-Parameter sofort entfernen, damit ein Reload NICHT wieder den Login-Screen auslöst
+      window.history.replaceState({}, '', window.location.pathname);
       if(snap.val()!==null){
         addRecentTournament(joinId, snap.val().name);
         connectToTournament(joinId);
-        // Team-Login automatisch anbieten, sobald Turnierdaten geladen sind
+        // Team-Login automatisch anbieten, sobald Turnierdaten geladen sind (nur bei diesem QR-Aufruf, nicht bei jedem Reload)
         setTimeout(()=>{ if(allTeams().length) openTeamLogin(); }, 600);
       } else if(TID){
         connectToTournament(TID);
@@ -783,6 +798,7 @@ function tlConfirm(){
     return;
   }
   activeTeam = team;
+  localStorage.setItem(ATK, team);
   // Falls noch kein Kader hinterlegt: Pflicht-Schritt zur Spielereingabe
   if(!S.rosters[team] || S.rosters[team].length===0){
     document.getElementById('tl-pin-section').style.display='none';
@@ -1422,7 +1438,7 @@ function lockAdmin(){ S.adminUnlocked=false;save();renderAdm();renderOv(); }
 function resetAll(){
   if(!confirm('Turnier wirklich zurücksetzen? Alle Daten (Teams, Ergebnisse, Kader) werden unwiderruflich gelöscht.'))return;
   if(!confirm('Bist du WIRKLICH sicher? Dies kann nicht rückgängig gemacht werden.'))return;
-  S=dflt();activeTeam=null;save();
+  S=dflt();activeTeam=null;localStorage.removeItem(ATK);save();
   document.getElementById('team-banner').style.display='none';
   showView('overview');
 }
