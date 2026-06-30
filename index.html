@@ -1325,6 +1325,27 @@ function genMatches(teams){
     ms.push({id:uid(),home:teams[i],away:teams[j],h:'',a:'',time:'',locked:false,winner:null,events:[]});
   return ms;
 }
+
+// Mischt die Spielpläne mehrerer Gruppen reihum (Round-Robin über die Gruppen),
+// damit nicht erst alle Spiele einer Gruppe komplett durchgespielt werden, bevor
+// die nächste Gruppe überhaupt beginnt. Innerhalb jeder Gruppe bleibt die Reihenfolge
+// der Spiele unverändert (die ist bereits so konstruiert, dass kein Team zu oft
+// direkt hintereinander spielt).
+function interleaveGroupMatches(groupMatchesObj){
+  const queues = Object.keys(groupMatchesObj)
+    .sort((a,b)=>+a-+b) // numerische Gruppen-Indizes in Reihenfolge
+    .map(gi => [...groupMatchesObj[gi]]);
+  const result = [];
+  let anyLeft = true;
+  while(anyLeft){
+    anyLeft = false;
+    for(const q of queues){
+      if(q.length){ result.push(q.shift()); anyLeft = true; }
+    }
+  }
+  return result;
+}
+
 function makePins(teams){
   const pins={}, used=new Set();
   teams.forEach(t=>{ let p; do{p=rpin();}while(used.has(p)); used.add(p); pins[t]=p; });
@@ -1493,9 +1514,10 @@ function startFromEditor(){
   });
   S.koTiming = Object.keys(perRound).length ? { perRound } : null;
 
-  // Alle Gruppenspiele automatisch verteilen (chronologisch über Felder hinweg)
-  const allGroupMatches = [];
-  S.groups.forEach((g,gi)=>gm[gi].forEach(m=>allGroupMatches.push(m)));
+  // Gruppenspiele automatisch verteilen — WICHTIG: nicht gruppenweise hintereinander
+  // (sonst ist immer eine Gruppe als erste komplett fertig), sondern reihum gemischt,
+  // damit alle Gruppen gleichmäßig und parallel über den Tag verteilt spielen.
+  const allGroupMatches = interleaveGroupMatches(gm);
   scheduleMatchList(allGroupMatches, firstTime, matchDuration, fieldsGroup);
 
   S.phase='group'; save();
@@ -1992,6 +2014,53 @@ function exportSchedulePDF(){
   w.document.close();
 }
 
+// Erstellt eine VOLLSTÄNDIGE Vorschau der KO-Phase inkl. Anstoßzeiten und
+// Platzierungsspielen — ohne den echten State zu verändern. Wird genutzt,
+// damit der chronologische Zeitplan von Anfang an (auch vor Abschluss der
+// Gruppenphase) zeigt, WANN die KO-Spiele stattfinden würden, mit
+// Platzhalter-Namen wie "Sieger Gr. A", bis die echten Teams feststehen.
+function buildKOPreviewWithTiming(){
+  const { seeded } = computeQualifiers(); // placeholdersOnly=true (Standard)
+  if(seeded.length < 2) return { koRounds:[], placementGames:[] };
+  const previewKO = mkBracket(seeded);
+
+  const sched = S.schedule;
+  if(!sched) return { koRounds:previewKO, placementGames:[] };
+
+  const durationForRound = (roundName) => {
+    const override = S.koTiming?.perRound?.[roundName];
+    if(!override) return sched.matchDuration;
+    const pure = override.halves===2 ? (override.halfLen*2 + (override.breakLen??sched.breakLen)) : override.halfLen;
+    return pure + (override.gapLen ?? sched.gapLen);
+  };
+
+  const allGM = Object.values(S.groupMatches).flat();
+  let nextStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+  previewKO.forEach(round=>{
+    const playable = round.matches.filter(m=>!m.isFrei);
+    const dur = durationForRound(round.name);
+    scheduleMatchList(playable, nextStart, dur, sched.fieldsKO);
+    nextStart = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
+  });
+
+  // Platzierungsspiele-Vorschau (mit Platzhaltern, da Verlierer noch nicht feststehen)
+  const placementOpts = availablePlacementOptions(previewKO).filter(o => (S.placement?.selected||[]).includes(o.key));
+  const previewPlacements = placementOpts.map(opt=>{
+    const sourceRoundIdx = previewKO.findIndex(r=>r.name===opt.sourceRound);
+    const sourceEnd = sourceRoundIdx>=0
+      ? latestMatchEnd(previewKO[sourceRoundIdx].matches.filter(m=>!m.isFrei), durationForRound(opt.sourceRound), sched.fieldsKO, sched.firstTime)
+      : sched.firstTime;
+    const matches = [];
+    for(let i=0;i<opt.numGames;i++){
+      matches.push({id:'preview_'+opt.key+'_'+i, home:`Verlierer ${opt.sourceRound}`, away:`Verlierer ${opt.sourceRound}`, h:'', a:'', time:'', locked:false, isFrei:false});
+    }
+    scheduleMatchList(matches, sourceEnd, durationForRound(opt.label), sched.fieldsKO);
+    return { key:opt.key, label:opt.label, matches };
+  });
+
+  return { koRounds: previewKO, placementGames: previewPlacements };
+}
+
 // ═══════════════════════════════════════════════════════════════
 // TURNIERBAUM — Gesamtübersicht: Gruppenphase + KO-Baum
 // ═══════════════════════════════════════════════════════════════
@@ -2004,17 +2073,26 @@ function renderTree(){
 
   let html = '<div class="card">';
 
+  // Falls die KO-Runde noch nicht final generiert ist, aber Zeitplan + Gruppen feststehen:
+  // Vorschau-Daten berechnen (mit Platzhalter-Namen + echten Anstoßzeiten), damit der
+  // chronologische Zeitplan unten vollständig ist.
+  const previewData = (!S.koRounds.length && S.phase==='group') ? buildKOPreviewWithTiming() : null;
+
   // ── CHRONOLOGISCHER ZEITPLAN (nach Feldern) ──
   if(S.schedule){
+    const koSource = S.koRounds.length ? S.koRounds : (previewData?.koRounds || []);
+    const placementSource = (S.placementGames && S.placementGames.length) ? S.placementGames : (previewData?.placementGames || []);
     const allMatches = [
       ...Object.values(S.groupMatches).flat().map(m=>({...m, phase:'Gruppe'})),
-      ...S.koRounds.flatMap(r=>r.matches.filter(m=>!m.isFrei).map(m=>({...m, phase:r.name})))
+      ...koSource.flatMap(r=>r.matches.filter(m=>!m.isFrei).map(m=>({...m, phase:r.name}))),
+      ...placementSource.flatMap(pg=>pg.matches.map(m=>({...m, phase:pg.label})))
     ].filter(m=>m.time);
     const byTime = {};
     allMatches.forEach(m=>{ (byTime[m.time]=byTime[m.time]||[]).push(m); });
     const times = Object.keys(byTime).sort();
     if(times.length){
       html += '<div class="tree-phase-lbl">Zeitplan (chronologisch, nach Feld)</div>';
+      if(previewData) html += '<p style="font-size:11px;color:var(--orange);margin-bottom:8px;">⚠ KO-Zeiten sind eine Vorschau mit Platzhaltern — die echten Teams stehen erst nach Abschluss der jeweiligen Gruppen fest.</p>';
       html += '<table style="margin-bottom:8px;"><thead><tr><th>Zeit</th>';
       const maxFields = Math.max(...allMatches.map(m=>m.field||1));
       for(let f=1; f<=maxFields; f++) html += `<th>Feld ${f}</th>`;
@@ -2099,9 +2177,9 @@ function renderTree(){
     html += '</div>'; // card
   } else if(S.phase==='group') {
     // ── LIVE-VORSCHAU der KO-Runde (basierend auf aktuellem, vorläufigem Tabellenstand) ──
-    const { seeded, scheme } = computeQualifiers();
-    if(seeded.length >= 2){
-      const previewRounds = mkBracket(seeded);
+    const { scheme } = computeQualifiers();
+    const previewRounds = previewData?.koRounds || [];
+    if(previewRounds.length){
       html += '<div class="card" style="border-left:4px solid var(--orange);">';
       html += '<div class="tree-phase-lbl" style="background:var(--orange);">🔮 KO-Runde — Live-Vorschau (vorläufig)</div>';
       html += `<p style="font-size:12px;color:var(--muted);margin-bottom:12px;">${esc(scheme)} Diese Vorschau basiert auf dem <strong>aktuellen Tabellenstand</strong> und ändert sich, sobald sich Gruppenspiele-Ergebnisse ändern. Sie wird automatisch verbindlich, sobald alle Gruppenspiele gespielt und gesperrt sind.</p>`;
@@ -2117,6 +2195,20 @@ function renderTree(){
           html += `<div class="tree-ko-match" style="opacity:0.85;">
             <div class="tkm-row"><span class="tkm-team${m.home==='?'?' placeholder':''}">${esc(m.home)}${m.homeOrigin?`<span class="tkm-origin">${esc(m.homeOrigin)}</span>`:''}</span></div>
             <div class="tkm-row"><span class="tkm-team${m.away==='?'?' placeholder':''}">${esc(m.away)}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span></div>
+            ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}${m.field?' · Feld '+m.field:''}</div>`:''}
+          </div>`;
+        });
+        html += '</div>';
+      });
+      // Geplante Platzierungsspiele anzeigen (basierend auf der Auswahl beim Turnierstart),
+      // auch wenn die konkreten Teams (Verlierer) noch nicht feststehen.
+      (previewData?.placementGames || []).forEach(pg=>{
+        html += `<div class="tree-ko-col"><div class="tree-ko-col-title">🥉 ${esc(pg.label)}</div>`;
+        pg.matches.forEach(m=>{
+          html += `<div class="tree-ko-match" style="opacity:0.7;">
+            <div class="tkm-row"><span class="tkm-team placeholder">${esc(m.home)}</span></div>
+            <div class="tkm-row"><span class="tkm-team placeholder">${esc(m.away)}</span></div>
+            ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}${m.field?' · Feld '+m.field:''}</div>`:''}
           </div>`;
         });
         html += '</div>';
