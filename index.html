@@ -1367,6 +1367,15 @@ function rmPlayer(team, idx){
 // ═══════════════════════════════════════════════════════════════
 // KO
 // ═══════════════════════════════════════════════════════════════
+// Prüft, ob ALLE Spiele einer Gruppe gespielt UND gesperrt sind — erst dann
+// steht die Platzierung dieser Gruppe wirklich fest und darf als Teamname
+// im KO-Baum erscheinen. Vorher gilt die Tabelle nur als Momentaufnahme.
+function isGroupComplete(gi){
+  const matches = S.groupMatches[gi] || [];
+  if(!matches.length) return false;
+  return matches.every(m => m.h!=='' && m.a!=='' && m.locked);
+}
+
 // ═══════════════════════════════════════════════════════════════
 // AUTOMATISCHE KO-QUALIFIKATION
 // Wählt je nach Gruppenanzahl automatisch das passende Schema, damit eine
@@ -1378,17 +1387,26 @@ function rmPlayer(team, idx){
 //   6 Gruppen → Top 2 je Gruppe (12) + 4 beste Dritte = 16 → Achtelfinale
 // Reicht die Anzahl Drittplatzierter nicht für eine glatte 2er-Potenz,
 // wird automatisch mit Freilosen aufgefüllt (Fallback, im Bracket sichtbar markiert).
+//
+// placeholdersOnly=true (Standard für die Live-Vorschau): Für Gruppen, deren
+// Platzierung noch NICHT feststeht (nicht alle Spiele gespielt+gesperrt),
+// wird statt des aktuell führenden Teamnamens nur "Sieger Gr. X" / "2. Gr. X"
+// / "Bester 3. Gr. X" angezeigt — damit kein vorläufiger Stand fälschlich
+// als sicher wirkt. Für buildKO() (finale Generierung) wird placeholdersOnly=false
+// genutzt, weil dort die Gruppenphase ohnehin schon komplett abgeschlossen ist.
 // ═══════════════════════════════════════════════════════════════
-function computeQualifiers(){
+function computeQualifiers(placeholdersOnly=true){
   const ng = S.groups.length;
   if(ng===0) return { seeded:[], scheme:'' };
 
   const winners=[], runnersUp=[], thirds=[];
   S.groups.forEach((g,gi)=>{
     const st = standings(g.teams, S.groupMatches[gi]||[]);
-    if(st[0]) winners.push({team:st[0].team, fromGroup:g.name, rank:1, pkt:st[0].pkt, td:st[0].td, tore:st[0].tore});
-    if(st[1]) runnersUp.push({team:st[1].team, fromGroup:g.name, rank:2, pkt:st[1].pkt, td:st[1].td, tore:st[1].tore});
-    if(st[2]) thirds.push({team:st[2].team, fromGroup:g.name, rank:3, pkt:st[2].pkt, td:st[2].td, tore:st[2].tore});
+    const complete = isGroupComplete(gi);
+    const nameOrPlaceholder = (rankLabel, team) => (placeholdersOnly && !complete) ? null : team;
+    if(st[0]) winners.push({team:nameOrPlaceholder('Sieger',st[0].team), fromGroup:g.name, rank:1, pkt:st[0].pkt, td:st[0].td, tore:st[0].tore, pending:!complete});
+    if(st[1]) runnersUp.push({team:nameOrPlaceholder('2.',st[1].team), fromGroup:g.name, rank:2, pkt:st[1].pkt, td:st[1].td, tore:st[1].tore, pending:!complete});
+    if(st[2]) thirds.push({team:nameOrPlaceholder('3.',st[2].team), fromGroup:g.name, rank:3, pkt:st[2].pkt, td:st[2].td, tore:st[2].tore, pending:!complete, realTeam:st[2].team});
   });
 
   const baseCount = winners.length + runnersUp.length; // Top 2 je Gruppe
@@ -1401,6 +1419,7 @@ function computeQualifiers(){
     scheme = `Die besten 2 jeder Gruppe qualifizieren sich (${baseCount} Teams → ${bracketName(nextPow2FromBase)}).`;
   } else if(neededThirds > 0 && neededThirds <= thirds.length){
     // Beste Drittplatzierte auffüllen, um Freilose zu vermeiden
+    // (Sortierung nach echtem Team-Wert, auch wenn Name noch als Platzhalter angezeigt wird)
     thirds.sort((a,b)=> b.pkt-a.pkt || b.td-a.td || b.tore-a.tore);
     qualThirds = thirds.slice(0, neededThirds).map(t=>({...t, isBestThird:true}));
     scheme = `Die besten 2 jeder Gruppe + die ${neededThirds} besten Gruppendritten qualifizieren sich (${baseCount+neededThirds} Teams → ${bracketName(nextPow2FromBase)}, keine Freilose).`;
@@ -1428,7 +1447,7 @@ function bracketName(size){
 }
 
 function buildKO(){
-  const { seeded } = computeQualifiers();
+  const { seeded } = computeQualifiers(false); // false = echte Teamnamen, keine Platzhalter (Gruppenphase ist hier final)
   S.koRounds=mkBracket(seeded);
 
   // KO-Zeitplan: automatisch ab Ende der Gruppenphase, jede Runde nacheinander
@@ -1472,13 +1491,20 @@ function mkBracket(q){
   while(cur.length>1){
     const ms=[];
     for(let i=0;i<cur.length;i+=2){
-      const t1=cur[i]?.team||'?', t2=cur[i+1]?.team||'?';
+      const origin1 = ri===0 ? originLabel(cur[i]) : null;
+      const origin2 = ri===0 ? originLabel(cur[i+1]) : null;
+      // Falls team-Name noch ein Platzhalter ist (null, weil Gruppe noch nicht final),
+      // wird der Origin-Text ("Sieger Gr. A") selbst zur Hauptanzeige statt nur "?".
+      const t1 = cur[i]?.team || (origin1 || '?');
+      const t2 = cur[i+1]?.team || (origin2 || '?');
       const isF=t1==='Freilos'||t2==='Freilos';
       ms.push({
         id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,
         winner:isF?(t1!=='Freilos'?t1:t2):null,isFrei:isF,events:[],
-        homeOrigin: ri===0 ? originLabel(cur[i]) : null,
-        awayOrigin: ri===0 ? originLabel(cur[i+1]) : null
+        // Origin nur als Untertitel zeigen, wenn der Hauptname bereits ein echter Teamname ist
+        // (sonst wäre es doppelt, weil der Origin-Text schon die Hauptanzeige ist)
+        homeOrigin: (ri===0 && cur[i]?.team) ? origin1 : null,
+        awayOrigin: (ri===0 && cur[i+1]?.team) ? origin2 : null
       });
     }
     rounds.push({name:names[cur.length]||'Runde '+(ri+1),matches:ms});
