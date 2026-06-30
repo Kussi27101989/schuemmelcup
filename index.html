@@ -119,6 +119,32 @@ td.tn{text-align:left;font-weight:600;}
 /* KO */
 .ko-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:18px;color:var(--blue);text-transform:uppercase;letter-spacing:1px;margin-bottom:10px;display:flex;align-items:center;gap:6px;}
 
+/* ── TURNIERBAUM ──────────────────────────────────────────────── */
+.tree-phase-lbl{font-family:'Barlow Condensed',sans-serif;font-weight:900;font-size:18px;color:var(--white);background:var(--dark);text-transform:uppercase;letter-spacing:1px;padding:8px 14px;border-radius:6px;margin:18px 0 12px;}
+.tree-phase-lbl:first-child{margin-top:0;}
+.tree-groups-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin-bottom:6px;}
+.tree-group-card{background:#fff;border:1px solid var(--border);border-radius:8px;padding:12px;}
+.tree-group-card .tgc-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:14px;color:var(--blue);text-transform:uppercase;margin-bottom:8px;}
+.tree-match-line{display:flex;align-items:center;gap:6px;padding:5px 0;border-bottom:1px solid var(--bg);font-size:12.5px;}
+.tree-match-line:last-child{border-bottom:none;}
+.tree-match-line .tml-team{flex:1;font-weight:500;}
+.tree-match-line .tml-team.win{font-weight:800;color:var(--green);}
+.tree-match-line .tml-score{font-family:'Barlow Condensed',sans-serif;font-weight:800;color:var(--dark);padding:0 6px;white-space:nowrap;}
+.tree-match-line .tml-time{font-size:10.5px;color:var(--muted);min-width:38px;text-align:right;}
+.tree-ko-rounds{display:flex;gap:16px;overflow-x:auto;padding-bottom:10px;align-items:stretch;}
+.tree-ko-col{display:flex;flex-direction:column;justify-content:space-around;gap:10px;min-width:200px;flex-shrink:0;}
+.tree-ko-col-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:13px;color:var(--blue);text-transform:uppercase;text-align:center;margin-bottom:4px;}
+.tree-ko-match{background:#fff;border:1.5px solid var(--border);border-radius:7px;padding:8px 10px;font-size:12.5px;}
+.tree-ko-match.has-winner{border-color:var(--green);}
+.tree-ko-match .tkm-row{display:flex;justify-content:space-between;align-items:center;gap:6px;padding:2px 0;}
+.tree-ko-match .tkm-team{flex:1;font-weight:600;}
+.tree-ko-match .tkm-team.win{color:var(--green);font-weight:800;}
+.tree-ko-match .tkm-team.placeholder{color:var(--muted);font-style:italic;font-weight:400;}
+.tree-ko-match .tkm-origin{font-size:9.5px;color:var(--muted);display:block;font-style:italic;}
+.tree-ko-match .tkm-score{font-weight:800;color:var(--dark);font-family:'Barlow Condensed',sans-serif;}
+.tree-ko-match .tkm-meta{font-size:10px;color:var(--muted);margin-top:4px;border-top:1px solid var(--bg);padding-top:4px;}
+.tree-ko-match.freilos-card{background:var(--bg);border-style:dashed;font-style:italic;color:var(--muted);}
+
 /* ADMIN */
 .admin-actions{display:flex;gap:10px;flex-wrap:wrap;}
 .btn-ko{background:var(--blue);color:#fff;border:none;padding:10px 20px;border-radius:7px;font-weight:700;}
@@ -349,6 +375,7 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <button data-view="groups">Gruppen</button>
       <button data-view="knockout">KO-Runde</button>
       <button data-view="schedule">Spielplan</button>
+      <button data-view="tree">Turnierbaum</button>
       <button data-view="stats">Torschützen</button>
       <button data-view="admin">⚙ Admin</button>
     </nav>
@@ -422,6 +449,12 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 <div class="view" id="view-schedule">
   <div class="sec-title">Spielplan</div>
   <div id="sch-content"><div class="card"><p style="color:var(--muted);">Noch keine Spiele.</p></div></div>
+</div>
+
+<div class="view" id="view-tree">
+  <div class="sec-title">Turnierbaum</div>
+  <p style="color:var(--muted);font-size:13px;margin-bottom:14px;">Vollständige Übersicht: Gruppenphase und KO-Runde mit allen Teams und Anstoßzeiten.</p>
+  <div id="tree-content"><div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div></div>
 </div>
 
 <div class="view" id="view-stats">
@@ -747,7 +780,7 @@ function showView(v){
   document.querySelectorAll('#main-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   render(v);
 }
-function render(v){ ({overview:renderOv,groups:renderGrp,knockout:renderKO,schedule:renderSch,stats:renderStats,admin:renderAdm})[v]?.(); }
+function render(v){ ({overview:renderOv,groups:renderGrp,knockout:renderKO,schedule:renderSch,tree:renderTree,stats:renderStats,admin:renderAdm})[v]?.(); }
 function renderAll(){ render(curView); }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1235,10 +1268,22 @@ function rmPlayer(team, idx){
 // KO
 // ═══════════════════════════════════════════════════════════════
 function buildKO(){
-  const quals=[];
-  S.groups.forEach((g,gi)=>standings(g.teams,S.groupMatches[gi]||[]).slice(0,2).forEach(s=>quals.push({team:s.team})));
-  const w=quals.filter((_,i)=>i%2===0), r=quals.filter((_,i)=>i%2!==0), seeded=[];
-  for(let i=0;i<Math.max(w.length,r.length);i++){if(w[i])seeded.push(w[i]);if(r[i])seeded.push(r[i]);}
+  // Klassische Kreuz-Setzung: Sieger Gruppe 1 vs. Zweiter Gruppe 2, Sieger Gruppe 2 vs. Zweiter Gruppe 3, usw.
+  // Verhindert, dass zwei Teams aus derselben Gruppe schon im ersten KO-Spiel aufeinandertreffen.
+  const ng = S.groups.length;
+  const winners = [], runnersUp = [];
+  S.groups.forEach((g,gi)=>{
+    const st = standings(g.teams, S.groupMatches[gi]||[]);
+    if(st[0]) winners.push({team:st[0].team, fromGroup:g.name, rank:1});
+    if(st[1]) runnersUp.push({team:st[1].team, fromGroup:g.name, rank:2});
+  });
+  const seeded = [];
+  for(let i=0;i<ng;i++){
+    const w = winners[i];
+    const r = runnersUp[(i+1)%ng]; // Zweiter der NÄCHSTEN Gruppe (über Kreuz)
+    if(w) seeded.push(w);
+    if(r) seeded.push(r);
+  }
   S.koRounds=mkBracket(seeded); S.phase='knockout'; save(); renderAll(); showView('knockout');
 }
 function mkBracket(q){
@@ -1251,7 +1296,12 @@ function mkBracket(q){
     for(let i=0;i<cur.length;i+=2){
       const t1=cur[i]?.team||'?', t2=cur[i+1]?.team||'?';
       const isF=t1==='Freilos'||t2==='Freilos';
-      ms.push({id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,winner:isF?(t1!=='Freilos'?t1:t2):null,isFrei:isF,events:[]});
+      ms.push({
+        id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,
+        winner:isF?(t1!=='Freilos'?t1:t2):null,isFrei:isF,events:[],
+        homeOrigin: ri===0 && cur[i]?.fromGroup ? `Sieger Gr. ${cur[i].fromGroup}` : (cur[i]?.fromGroup ? `2. Gr. ${cur[i].fromGroup}` : null),
+        awayOrigin: ri===0 && cur[i+1]?.fromGroup ? (cur[i+1]?.rank===1?`Sieger Gr. ${cur[i+1].fromGroup}`:`2. Gr. ${cur[i+1].fromGroup}`) : null
+      });
     }
     rounds.push({name:names[cur.length]||'Runde '+(ri+1),matches:ms});
     cur=ms.map(m=>({team:m.winner||'?'})); ri++; if(cur.length===1)break;
@@ -1364,6 +1414,87 @@ function renderKO(){
     </div>`).join('');
   setTimeout(initEventDropdowns, 0);
 }
+
+// ═══════════════════════════════════════════════════════════════
+// TURNIERBAUM — Gesamtübersicht: Gruppenphase + KO-Baum
+// ═══════════════════════════════════════════════════════════════
+function renderTree(){
+  const el = document.getElementById('tree-content');
+  if(!allTeams().length || S.phase==='setup' || S.phase==='editing'){
+    el.innerHTML = '<div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div>';
+    return;
+  }
+
+  let html = '<div class="card">';
+
+  // ── GRUPPENPHASE ──
+  html += '<div class="tree-phase-lbl">Gruppenphase</div>';
+  html += '<div class="tree-groups-row">';
+  S.groups.forEach((g,gi)=>{
+    html += `<div class="tree-group-card"><div class="tgc-title">Gruppe ${esc(g.name)}</div>`;
+    const matches = (S.groupMatches[gi]||[]).slice().sort((a,b)=>(a.time||'99:99').localeCompare(b.time||'99:99'));
+    if(!matches.length){
+      html += '<div style="font-size:12px;color:var(--muted);">Keine Spiele</div>';
+    } else {
+      matches.forEach(m=>{
+        const played = m.h!==''&&m.a!=='';
+        const homeWin = played && +m.h > +m.a;
+        const awayWin = played && +m.a > +m.h;
+        html += `<div class="tree-match-line">
+          <span class="tml-team${homeWin?' win':''}">${esc(m.home)}</span>
+          <span class="tml-score">${played?m.h+':'+m.a:'–:–'}</span>
+          <span class="tml-team${awayWin?' win':''}" style="text-align:right;">${esc(m.away)}</span>
+          <span class="tml-time">${m.time||''}</span>
+        </div>`;
+      });
+    }
+    html += '</div>';
+  });
+  html += '</div>'; // tree-groups-row
+  html += '</div>'; // card
+
+  // ── KO-RUNDE ──
+  if(S.koRounds.length){
+    html += '<div class="card">';
+    html += '<div class="tree-phase-lbl">KO-Runde</div>';
+    html += '<div class="tree-ko-rounds">';
+    S.koRounds.forEach((r,ri)=>{
+      html += `<div class="tree-ko-col"><div class="tree-ko-col-title">${ri===S.koRounds.length-1?'🏆 ':''}${esc(r.name)}</div>`;
+      r.matches.forEach(m=>{
+        if(m.isFrei){
+          const t = m.home!=='Freilos'?m.home:m.away;
+          html += `<div class="tree-ko-match freilos-card">${esc(t)} — Freilos (zieht automatisch weiter)</div>`;
+          return;
+        }
+        const played = m.h!==''&&m.a!=='';
+        const homeWin = played && +m.h > +m.a;
+        const awayWin = played && +m.a > +m.h;
+        const homeIsPlaceholder = m.home==='?';
+        const awayIsPlaceholder = m.away==='?';
+        html += `<div class="tree-ko-match${played?' has-winner':''}">
+          <div class="tkm-row">
+            <span class="tkm-team${homeWin?' win':''}${homeIsPlaceholder?' placeholder':''}">${esc(m.home)}${m.homeOrigin?`<span class="tkm-origin">${esc(m.homeOrigin)}</span>`:''}</span>
+            ${played?`<span class="tkm-score">${m.h}</span>`:''}
+          </div>
+          <div class="tkm-row">
+            <span class="tkm-team${awayWin?' win':''}${awayIsPlaceholder?' placeholder':''}">${esc(m.away)}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span>
+            ${played?`<span class="tkm-score">${m.a}</span>`:''}
+          </div>
+          ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}</div>`:''}
+        </div>`;
+      });
+      html += '</div>'; // tree-ko-col
+    });
+    html += '</div>'; // tree-ko-rounds
+    html += '</div>'; // card
+  } else {
+    html += '<div class="card"><div class="tree-phase-lbl">KO-Runde</div><p style="color:var(--muted);font-size:13px;">Wird nach Abschluss der Gruppenphase generiert (1. und 2. jeder Gruppe qualifizieren sich).</p></div>';
+  }
+
+  el.innerHTML = html;
+}
+
+
 
 function renderSch(){
   if(!allTeams().length||S.phase==='setup'||S.phase==='editing'){
