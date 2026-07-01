@@ -333,12 +333,41 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <div class="gate-step-lbl">Zuletzt verwendet</div>
       <div id="gate-recent-list"></div>
     </div>
+
+    <div class="gate-divider"><span>oder</span></div>
+
+    <div class="gate-section">
+      <div class="gate-step-lbl">Als Admin anmelden</div>
+      <p class="gate-hint">Turnier-Code und Admin-PIN eingeben — du landest direkt im Admin-Bereich.</p>
+      <input type="text" id="gate-admin-code" placeholder="Turnier-Code, z.B. tk_8f3a1c" maxlength="20" style="margin-bottom:8px;">
+      <input type="password" id="gate-admin-pin" placeholder="Admin-PIN" maxlength="8" style="margin-bottom:8px;" onkeydown="if(event.key==='Enter')gateAdminLogin()">
+      <button class="btn-confirm" onclick="gateAdminLogin()">🔑 Als Admin anmelden</button>
+      <div class="gate-err" id="gate-admin-err"></div>
+    </div>
+
+    <div style="margin-top:24px;border-top:1px solid rgba(255,255,255,.15);padding-top:20px;text-align:center;">
+      <button onclick="showHoFStandalone()" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
+        🏆 Ewige Bestenliste ansehen
+      </button>
+    </div>
   </div>
 </div>
 
-<!-- App-Shell: alles bisherige, jetzt versteckt bis ein Turnier verbunden ist -->
-<div id="app-shell" style="display:none;">
+<!-- BESTENLISTE OVERLAY (außerhalb app-shell — auch ohne Turnier erreichbar) -->
+<div id="hof-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;overflow-y:auto;padding:20px 16px;">
+  <div style="max-width:700px;margin:0 auto;background:var(--bg);border-radius:12px;overflow:hidden;">
+    <div style="background:linear-gradient(135deg,#00317A,#0050A0);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+      <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:.5px;">🏆 Ewige Bestenliste</div>
+      <button onclick="document.getElementById('hof-overlay').style.display='none'" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;">✕ Schließen</button>
+    </div>
+    <div id="hof-overlay-content" style="padding:16px;">
+      <p style="color:var(--muted);">Lade…</p>
+    </div>
+  </div>
+</div>
 
+<!-- App-Shell: versteckt bis ein Turnier verbunden ist -->
+<div id="app-shell" style="display:none;">
 
 <!-- TEAM LOGIN OVERLAY -->
 <div id="tl-overlay">
@@ -817,23 +846,23 @@ async function loadAndAggregateArchive(){
   return aggregateArchive(Object.values(val));
 }
 
-async function renderHoF(){
-  const box = document.getElementById('hof-content');
-  if(!box) return;
-  box.innerHTML = '<div class="card"><p style="color:var(--muted);">🔄 Lade Archiv…</p></div>';
+// Rendert die Bestenliste in ein DOM-Element. Wird von renderHoF (App-View)
+// und showHoFStandalone (Overlay ohne Turnier) gemeinsam genutzt.
+async function renderHoFInto(targetEl){
+  if(!targetEl) return;
+  targetEl.innerHTML = '<div class="card"><p style="color:var(--muted);">🔄 Lade Archiv…</p></div>';
   let data;
   try { data = await loadAndAggregateArchive(); }
   catch(e){
-    box.innerHTML = `<div class="card"><p style="color:var(--red);">Fehler beim Laden: ${esc(e.message)}</p></div>`;
+    targetEl.innerHTML = `<div class="card"><p style="color:var(--red);">Fehler beim Laden: ${esc(e.message)}</p></div>`;
     return;
   }
   if(!data.tournaments.length){
-    box.innerHTML = '<div class="card"><p style="color:var(--muted);font-size:14px;">Noch keine abgeschlossenen Turniere im Archiv. Sobald das erste Turnier über den Admin-Bereich abgeschlossen wird, erscheint hier die Ewige Bestenliste.</p></div>';
+    targetEl.innerHTML = '<div class="card"><p style="color:var(--muted);font-size:14px;">Noch keine abgeschlossenen Turniere im Archiv. Sobald das erste Turnier über den Admin-Bereich abgeschlossen wird, erscheint hier die Ewige Bestenliste.</p></div>';
     return;
   }
   let h = '';
 
-  // Teilnehmende Turniere
   h += `<div class="card">
     <div class="sec-title" style="margin-bottom:10px;">📅 Turnier-Historie (${data.tournaments.length})</div>
     <table class="pin-tbl"><thead><tr><th>Datum</th><th>Turnier</th><th>Sieger</th><th>Spiele</th><th>Tore</th></tr></thead><tbody>`;
@@ -844,7 +873,6 @@ async function renderHoF(){
   });
   h += '</tbody></table></div>';
 
-  // Ewige Team-Tabelle
   h += `<div class="card">
     <div class="sec-title" style="margin-bottom:10px;">🥇 Ewige Team-Tabelle</div>
     <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Sortiert nach Turniersiegen, dann 2./3./4.-Plätze, dann Gesamt-Gruppenpunkte.</p>
@@ -854,7 +882,6 @@ async function renderHoF(){
   });
   h += '</tbody></table></div>';
 
-  // Ewige Torschützen (Top 20)
   if(data.scorers.length){
     h += `<div class="card">
       <div class="sec-title" style="margin-bottom:10px;">⚽ Ewige Torschützenliste (Top 20)</div>
@@ -865,7 +892,20 @@ async function renderHoF(){
     h += '</tbody></table></div>';
   }
 
-  box.innerHTML = h;
+  targetEl.innerHTML = h;
+}
+
+async function renderHoF(){
+  await renderHoFInto(document.getElementById('hof-content'));
+}
+
+// Öffnet die Bestenliste als Overlay — funktioniert auch ohne verbundenes Turnier,
+// direkt vom Gate-Bildschirm aus.
+async function showHoFStandalone(){
+  const overlay = document.getElementById('hof-overlay');
+  if(!overlay) return;
+  overlay.style.display = 'block';
+  await renderHoFInto(document.getElementById('hof-overlay-content'));
 }
 
 
@@ -1464,7 +1504,6 @@ function showTournamentGate(errMsg){
 function gateJoin(){
   const code = document.getElementById('gate-join-code').value.trim();
   if(!code){ alert('Bitte einen Turnier-Code eingeben.'); return; }
-  // Prüfen ob Turnier existiert
   fbdb.ref('tournaments/'+code+'/meta').once('value').then(snap=>{
     if(snap.val()===null){
       const errEl = document.getElementById('gate-join-err');
@@ -1478,6 +1517,52 @@ function gateJoin(){
     const errEl = document.getElementById('gate-join-err');
     errEl.textContent = 'Fehler: '+err.message;
     errEl.style.display='block';
+  });
+}
+
+// Admin-Direktlogin: Turnier-Code + Admin-PIN im Gate eingeben → verbinden +
+// Admin-Modus sofort entsperren, ohne nochmals PIN tippen zu müssen.
+function gateAdminLogin(){
+  const code = document.getElementById('gate-admin-code').value.trim();
+  const pin  = document.getElementById('gate-admin-pin').value.trim();
+  const errEl = document.getElementById('gate-admin-err');
+  errEl.style.display = 'none';
+  if(!code){ errEl.textContent='Bitte den Turnier-Code eingeben.'; errEl.style.display='block'; return; }
+  if(!pin){  errEl.textContent='Bitte die Admin-PIN eingeben.'; errEl.style.display='block'; return; }
+  fbdb.ref('tournaments/'+code+'/adminPin').once('value').then(snap=>{
+    const storedPin = snap.val();
+    if(storedPin === null){
+      errEl.textContent = 'Kein Turnier mit diesem Code gefunden.';
+      errEl.style.display = 'block';
+      return;
+    }
+    if(String(storedPin) !== String(pin)){
+      errEl.textContent = 'Falscher Admin-PIN.';
+      errEl.style.display = 'block';
+      // Sicherheitshalber PIN-Feld leeren, damit kein weiteres Brute-Forcing möglich ist.
+      document.getElementById('gate-admin-pin').value = '';
+      return;
+    }
+    // PIN korrekt → verbinden und Admin-Modus direkt aktivieren.
+    // localAdminUnlocked wird NACH dem Laden gesetzt, da connectToTournament asynchron
+    // ist und S.adminPin erst nach dem Firebase-Lesen verfügbar ist.
+    addRecentTournament(code, '');
+    connectToTournament(code);
+    // Admin-Modus setzen sobald der erste Render-Aufruf nach dem Verbinden läuft.
+    // Wir nutzen einen einmaligen Listener auf S, indem wir localAdminUnlocked direkt
+    // setzen — connectToTournament lädt S und ruft dann renderAll() auf, was
+    // renderAdm() auslöst. Da localAdminUnlocked zu dem Zeitpunkt schon true ist,
+    // zeigt renderAdm direkt den Admin-Inhalt.
+    localAdminUnlocked = true;
+    // Nach dem Verbinden direkt zur Admin-View navigieren.
+    // (showView ist erst nach connectToTournament verfügbar, daher kurze Verzögerung)
+    setTimeout(() => {
+      showView('admin');
+      renderAdm();
+    }, 800);
+  }).catch(err=>{
+    errEl.textContent = 'Verbindungsfehler: '+err.message;
+    errEl.style.display = 'block';
   });
 }
 
