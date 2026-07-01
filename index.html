@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="theme-color" content="#00317A">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Schümmelcup">
 <title>Schümmelcup – 1. FC Monheim</title>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@700;800;900&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
@@ -276,11 +280,25 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 .btn-tournament-switch{background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:4px 10px;border-radius:5px;font-size:11px;margin-left:8px;}
 #current-tournament-name{font-size:11px;color:rgba(255,255,255,.6);}
 
+/* Live-Verbindungs-Indikator (klein, oben rechts). Farbcodiert: grün = live, gelb = Server-Sync-Problem, rot = Offline. */
+#conn-indicator{position:fixed;top:8px;right:8px;padding:4px 10px 4px 8px;border-radius:12px;font-size:11px;font-weight:600;z-index:700;display:inline-flex;align-items:center;gap:6px;box-shadow:0 2px 6px rgba(0,0,0,.15);cursor:default;}
+#conn-indicator.conn-on   {background:#E6F4EA;color:var(--green);border:1px solid var(--green);}
+#conn-indicator.conn-warn {background:#FFF4E5;color:var(--orange);border:1px solid var(--orange);}
+#conn-indicator.conn-off  {background:#FCE8EA;color:var(--red);border:1px solid var(--red);}
+#conn-indicator .conn-dot{width:8px;height:8px;border-radius:50%;background:currentColor;box-shadow:0 0 0 2px rgba(255,255,255,.6);}
+#conn-indicator.conn-on .conn-dot{animation:conn-pulse 2s infinite;}
+@keyframes conn-pulse{0%,100%{opacity:1;}50%{opacity:.4;}}
+
+#pwa-install-btn{position:fixed;bottom:16px;right:16px;background:var(--blue);color:#fff;border:none;padding:10px 16px;border-radius:24px;font-size:13px;font-weight:700;z-index:700;box-shadow:0 4px 12px rgba(0,80,160,.35);display:inline-flex;align-items:center;gap:6px;cursor:pointer;}
+#pwa-install-btn:hover{background:var(--dark);}
+
 </style>
 </head>
 <body>
 
 <div id="conn-status"><span class="spinner"></span> Verbinde mit Turnier...</div>
+<div id="conn-indicator" class="conn-on" title="Live verbunden."><span class="conn-dot"></span> Live</div>
+<button id="pwa-install-btn" onclick="triggerPwaInstall()" style="display:none;">📲 Installieren</button>
 
 <!-- TURNIER-GATE wird per JS eingefügt (gate_html.html Inhalt) -->
 <!-- ═══════════════════════════════════════════════════════════
@@ -378,6 +396,7 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <button data-view="knockout">KO-Runde</button>
       <button data-view="schedule">Spielplan</button>
       <button data-view="stats">Torschützen</button>
+      <button data-view="hof">🏆 Bestenliste</button>
       <button data-view="admin">⚙ Admin</button>
     </nav>
   </div>
@@ -535,6 +554,11 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
   <div id="stats-content"><div class="card"><p style="color:var(--muted);">Noch keine Daten.</p></div></div>
 </div>
 
+<div class="view" id="view-hof">
+  <div class="sec-title">🏆 Ewige Bestenliste</div>
+  <div id="hof-content"><div class="card"><p style="color:var(--muted);">Lade Archiv…</p></div></div>
+</div>
+
 <div class="view" id="view-admin">
   <div class="sec-title">Admin-Bereich</div>
   <div class="card" id="adm-lock">
@@ -557,6 +581,33 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
     <div class="card" id="adm-master-qr"></div>
     <div class="card" id="adm-pins"></div>
     <div class="card" id="adm-roster"></div>
+    <div class="card" style="border-left:4px solid var(--blue);" id="adm-backup">
+      <div style="font-weight:700;color:var(--blue);margin-bottom:6px;">💾 Sicherung &amp; Wiederherstellung</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        Automatische Snapshots werden alle 5 Minuten lokal auf diesem Gerät gespeichert (max. 20 Stück).
+        Zusätzlich kannst du den kompletten Turnierstand als JSON-Datei exportieren, um ihn extern (Google Drive, E-Mail, USB) zu sichern.
+      </p>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;">
+        <button onclick="exportBackup()" style="background:var(--blue);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;">⬇ Als JSON exportieren</button>
+        <label style="background:var(--orange);color:#fff;padding:8px 14px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;">
+          ⬆ Aus JSON importieren
+          <input type="file" accept=".json,application/json" onchange="importBackup(event)" style="display:none;">
+        </label>
+        <button onclick="createManualSnapshot()" style="background:var(--green);color:#fff;border:none;padding:8px 14px;border-radius:6px;font-weight:600;font-size:13px;cursor:pointer;">📸 Snapshot jetzt erstellen</button>
+      </div>
+      <div style="font-weight:600;font-size:13px;margin-bottom:6px;color:var(--fg);">Lokale Snapshots (dieses Gerät)</div>
+      <div id="adm-snapshot-list" style="font-size:12px;"></div>
+    </div>
+
+    <div class="card" style="border-left:4px solid var(--green);" id="adm-archive">
+      <div style="font-weight:700;color:var(--green);margin-bottom:6px;">🏆 Turnier abschließen &amp; ins Archiv übertragen</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        Wenn das Finale gespielt ist, schließt du das Turnier hier ab: die Endplatzierung, Torschützen und Karten werden dauerhaft in die Ewige Bestenliste übernommen.
+        Ein abgeschlossenes Turnier kann danach nicht mehr bearbeitet werden — die Archiv-Daten überdauern das Löschen des Turniers selbst.
+      </p>
+      <div id="adm-archive-status" style="font-size:12px;margin-bottom:10px;"></div>
+      <button id="btn-finish-tournament" onclick="finishTournament()" style="background:var(--green);color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">🏁 Turnier abschließen</button>
+    </div>
   </div>
 
 </div>
@@ -584,12 +635,572 @@ const firebaseConfig = {
 firebase.initializeApp(firebaseConfig);
 const fbdb = firebase.database();
 
+// ═══════════════════════════════════════════════════════════════
+// ARCHIV & EWIGE BESTENLISTE
+// ───────────────────────────────────────────────────────────────
+// Nach dem Turnier-Abschluss wird ein KONDENSIERTER Datensatz aus dem laufenden
+// State extrahiert und in eine separate Firebase-Sammlung (archive/…) geschrieben.
+// Die Sammlung ist bewusst vom Turnier-Knoten getrennt, damit ein Löschen des
+// Turniers das Archiv NICHT mit vernichtet.
+// Aus allen Archiv-Einträgen aggregiert renderHoF() die ewige Bestenliste:
+// Team-Statistiken über alle Turniere, Torschützenkönig-Kumulierung, Rekorde.
+// ═══════════════════════════════════════════════════════════════
+
+// Normalisiert Teamnamen für die turnierübergreifende Aggregation. Ohne diese
+// Normalisierung würden "1. FC Monheim AH", "FC Monheim Alte Herren" und
+// "  fc monheim  " als drei verschiedene Teams gezählt.
+function canonTeamName(name){
+  return String(name||'').toLowerCase().replace(/\s+/g,' ').trim();
+}
+
+// Baut aus dem aktuellen State (S) einen kondensierten Archiv-Datensatz.
+// Enthält nur die Ergebnis-Essenz, KEINE Kader/PINs/etc. — die will man in einer
+// öffentlichen Bestenliste nicht sehen.
+function buildArchiveRecord(){
+  const record = {
+    tid: TID,
+    name: S.meta?.name || '',
+    finishedAt: new Date().toISOString(),
+    createdAt: S.meta?.createdAt || 0,
+    teams: [], // { name, canon, group, groupRank }
+    groupStandings: [], // Endtabelle pro Gruppe
+    finalRanking: [],   // Gesamtplatzierung über KO + Platzierungsspiele
+    scorers: [],        // { player, team, goals }
+    cards: { yellow:0, red:0 },
+    stats: { games:0, goals:0 },
+  };
+
+  // Team-Roster + Gruppen
+  S.groups.forEach(g => {
+    const st = standings(g.teams, S.groupMatches[Object.keys(S.groupMatches).find(k=>S.groups[k]===g)]||[], S.tiebreaker);
+    const gi = S.groups.indexOf(g);
+    const stTable = standings(g.teams, S.groupMatches[gi]||[], S.tiebreaker);
+    record.groupStandings.push({ group: g.name, table: stTable.map((row,i) => ({ rank:i+1, team:row.team, canon:canonTeamName(row.team), pkt:row.pkt, td:row.td, tore:row.tore })) });
+    stTable.forEach((row,i) => record.teams.push({ name:row.team, canon:canonTeamName(row.team), group:g.name, groupRank:i+1 }));
+  });
+
+  // Torschützenliste über alle Spiele (Gruppen + KO + Platzierung)
+  const goalTally = new Map(); // key: canon(team)+'|'+player → goals
+  const teamCards = { yellow:0, red:0 };
+  let gameCount = 0, goalCount = 0;
+  const walkMatches = (mArr) => mArr.forEach(m => {
+    if(m.isFrei) return;
+    if(m.h!=='' && m.a!==''){
+      gameCount++;
+      goalCount += (+m.h||0) + (+m.a||0);
+    }
+    (m.events||[]).forEach(ev => {
+      const team = ev.side==='home' ? m.home : m.away;
+      const key = canonTeamName(team) + '|' + (ev.player||'?');
+      if(ev.type==='goal') goalTally.set(key, (goalTally.get(key)||0) + 1);
+      else if(ev.type==='yellow') teamCards.yellow++;
+      else if(ev.type==='red') teamCards.red++;
+    });
+  });
+  Object.values(S.groupMatches).forEach(walkMatches);
+  (S.koRounds||[]).forEach(r => walkMatches(r.matches));
+  (S.placementGames||[]).forEach(pg => walkMatches(pg.matches));
+  record.scorers = [...goalTally.entries()].map(([k,g]) => {
+    const [teamCanon, player] = k.split('|');
+    return { team:teamCanon, player, goals:g };
+  }).sort((a,b) => b.goals - a.goals);
+  record.cards = teamCards;
+  record.stats = { games:gameCount, goals:goalCount };
+
+  // Endplatzierung: Finale + Spiel um Platz 3 auswerten, ergänzt um KO-Ausscheider
+  const koRounds = S.koRounds || [];
+  const finalMatch = koRounds.length ? koRounds[koRounds.length-1].matches.find(m=>!m.isFrei) : null;
+  const platz3Game = (S.placementGames||[]).find(pg => pg.key==='platz3');
+  const finalRank = [];
+  if(finalMatch && finalMatch.winner){
+    finalRank.push({ rank:1, team:finalMatch.winner, canon:canonTeamName(finalMatch.winner) });
+    const runnerUp = finalMatch.winner===finalMatch.home ? finalMatch.away : finalMatch.home;
+    finalRank.push({ rank:2, team:runnerUp, canon:canonTeamName(runnerUp) });
+  }
+  if(platz3Game && platz3Game.matches[0]?.winner){
+    const p3 = platz3Game.matches[0];
+    finalRank.push({ rank:3, team:p3.winner, canon:canonTeamName(p3.winner) });
+    const fourth = p3.winner===p3.home ? p3.away : p3.home;
+    finalRank.push({ rank:4, team:fourth, canon:canonTeamName(fourth) });
+  }
+  record.finalRanking = finalRank;
+
+  return record;
+}
+
+// Turnier abschließen: kondensiertes Archiv anlegen, Phase auf 'done' setzen.
+async function finishTournament(){
+  if(!TID){ alert('Kein Turnier geladen.'); return; }
+  if(S.phase === 'done'){ alert('Dieses Turnier ist bereits abgeschlossen.'); return; }
+  // Voraussetzung: Es MUSS mindestens ein Finale-Sieger existieren
+  const koRounds = S.koRounds || [];
+  const finalMatch = koRounds.length ? koRounds[koRounds.length-1].matches.find(m=>!m.isFrei) : null;
+  if(!finalMatch || !finalMatch.winner){
+    if(!confirm('⚠ Das Finale wurde noch nicht entschieden. Trotzdem abschließen? (Die Bestenliste wird ohne Endplatzierung eingetragen.)')) return;
+  } else {
+    if(!confirm(`Turnier "${S.meta?.name || TID}" abschließen?\n\n• Endstand wird in die Ewige Bestenliste übernommen\n• Turnier kann danach nicht mehr bearbeitet werden`)) return;
+  }
+  createSnapshot(true); // Sicherheits-Snapshot vor Abschluss
+  const record = buildArchiveRecord();
+  try {
+    // Archiv-Eintrag mit Turnier-Code als Key — verhindert Duplikate bei erneutem Klick
+    await fbdb.ref('archive/'+TID).set(record);
+    // Turnier-Phase auf 'done' setzen
+    S.phase = 'done';
+    save();
+    alert('✓ Turnier erfolgreich abgeschlossen und archiviert.\n\nDie Ewige Bestenliste findest du im Menüpunkt „🏆 Bestenliste".');
+    renderAll();
+  } catch(e){
+    console.error('Archiv-Fehler:', e);
+    alert('❌ Konnte Archiv-Eintrag nicht speichern:\n' + e.message);
+  }
+}
+
+// Pure Aggregations-Logik, die aus einer Liste von Archiv-Records eine ewige
+// Tabelle + Torschützenliste + Turnier-Historie erzeugt. Ausgelagert aus
+// loadAndAggregateArchive(), um sie ohne Netz-Abhängigkeit testbar zu machen.
+function aggregateArchive(tournaments){
+  // Ewige Team-Tabelle
+  const teamAgg = new Map();
+  const bumpTeam = (canon, displayName) => {
+    if(!teamAgg.has(canon)) teamAgg.set(canon, { name:displayName, canon, participations:0, wins:0, second:0, third:0, fourth:0, groupPoints:0, groupGoalsFor:0, groupGoalsAgainst:0 });
+    return teamAgg.get(canon);
+  };
+  tournaments.forEach(t => {
+    const seen = new Set();
+    (t.teams||[]).forEach(team => {
+      if(seen.has(team.canon)) return; seen.add(team.canon);
+      bumpTeam(team.canon, team.name).participations++;
+    });
+    (t.finalRanking||[]).forEach(r => {
+      const agg = bumpTeam(r.canon, r.team);
+      if(r.rank===1) agg.wins++;
+      else if(r.rank===2) agg.second++;
+      else if(r.rank===3) agg.third++;
+      else if(r.rank===4) agg.fourth++;
+    });
+    (t.groupStandings||[]).forEach(g => (g.table||[]).forEach(row => {
+      const agg = bumpTeam(row.canon, row.team);
+      agg.groupPoints += (row.pkt||0);
+      agg.groupGoalsFor += (row.tore||0);
+      agg.groupGoalsAgainst += ((row.tore||0) - (row.td||0));
+    }));
+  });
+
+  // Ewige Torschützen
+  const scorerAgg = new Map();
+  tournaments.forEach(t => (t.scorers||[]).forEach(s => {
+    const key = s.team + '|' + s.player;
+    if(!scorerAgg.has(key)) scorerAgg.set(key, { team:s.team, player:s.player, goals:0, tournaments:0 });
+    const agg = scorerAgg.get(key);
+    agg.goals += (s.goals||0);
+    agg.tournaments++;
+  }));
+
+  return {
+    tournaments: tournaments.slice().sort((a,b) => (b.finishedAt||'').localeCompare(a.finishedAt||'')),
+    teams: [...teamAgg.values()].sort((a,b) =>
+      b.wins - a.wins
+      || b.second - a.second
+      || b.third - a.third
+      || b.groupPoints - a.groupPoints
+    ),
+    scorers: [...scorerAgg.values()].sort((a,b) => b.goals - a.goals),
+  };
+}
+
+// Liest ALLE Archiv-Einträge und aggregiert daraus die Bestenliste. Netz-abhängig
+// (Firebase-Read); die eigentliche Aggregation läuft in aggregateArchive().
+async function loadAndAggregateArchive(){
+  const snap = await fbdb.ref('archive').once('value');
+  const val = snap.val() || {};
+  return aggregateArchive(Object.values(val));
+}
+
+async function renderHoF(){
+  const box = document.getElementById('hof-content');
+  if(!box) return;
+  box.innerHTML = '<div class="card"><p style="color:var(--muted);">🔄 Lade Archiv…</p></div>';
+  let data;
+  try { data = await loadAndAggregateArchive(); }
+  catch(e){
+    box.innerHTML = `<div class="card"><p style="color:var(--red);">Fehler beim Laden: ${esc(e.message)}</p></div>`;
+    return;
+  }
+  if(!data.tournaments.length){
+    box.innerHTML = '<div class="card"><p style="color:var(--muted);font-size:14px;">Noch keine abgeschlossenen Turniere im Archiv. Sobald das erste Turnier über den Admin-Bereich abgeschlossen wird, erscheint hier die Ewige Bestenliste.</p></div>';
+    return;
+  }
+  let h = '';
+
+  // Teilnehmende Turniere
+  h += `<div class="card">
+    <div class="sec-title" style="margin-bottom:10px;">📅 Turnier-Historie (${data.tournaments.length})</div>
+    <table class="pin-tbl"><thead><tr><th>Datum</th><th>Turnier</th><th>Sieger</th><th>Spiele</th><th>Tore</th></tr></thead><tbody>`;
+  data.tournaments.forEach(t => {
+    const winner = (t.finalRanking||[]).find(r=>r.rank===1)?.team || '—';
+    const dateStr = t.finishedAt ? new Date(t.finishedAt).toLocaleDateString('de-DE') : '—';
+    h += `<tr><td>${esc(dateStr)}</td><td><strong>${esc(t.name||t.tid)}</strong></td><td>🏆 ${esc(winner)}</td><td>${t.stats?.games||0}</td><td>${t.stats?.goals||0}</td></tr>`;
+  });
+  h += '</tbody></table></div>';
+
+  // Ewige Team-Tabelle
+  h += `<div class="card">
+    <div class="sec-title" style="margin-bottom:10px;">🥇 Ewige Team-Tabelle</div>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Sortiert nach Turniersiegen, dann 2./3./4.-Plätze, dann Gesamt-Gruppenpunkte.</p>
+    <table class="pin-tbl"><thead><tr><th style="text-align:left;">Team</th><th>Teilnahmen</th><th>🏆 Siege</th><th>🥈 2.</th><th>🥉 3.</th><th>4.</th><th>Grp.Pkt</th><th>Tore</th></tr></thead><tbody>`;
+  data.teams.forEach(t => {
+    h += `<tr><td style="text-align:left;"><strong>${esc(t.name)}</strong></td><td>${t.participations}</td><td>${t.wins}</td><td>${t.second}</td><td>${t.third}</td><td>${t.fourth}</td><td>${t.groupPoints}</td><td>${t.groupGoalsFor}:${t.groupGoalsAgainst}</td></tr>`;
+  });
+  h += '</tbody></table></div>';
+
+  // Ewige Torschützen (Top 20)
+  if(data.scorers.length){
+    h += `<div class="card">
+      <div class="sec-title" style="margin-bottom:10px;">⚽ Ewige Torschützenliste (Top 20)</div>
+      <table class="pin-tbl"><thead><tr><th>#</th><th style="text-align:left;">Spieler</th><th style="text-align:left;">Team</th><th>Tore</th><th>Turniere</th></tr></thead><tbody>`;
+    data.scorers.slice(0,20).forEach((s,i) => {
+      h += `<tr><td>${i+1}</td><td style="text-align:left;">${esc(s.player)}</td><td style="text-align:left;">${esc(s.team)}</td><td><strong>${s.goals}</strong></td><td>${s.tournaments}</td></tr>`;
+    });
+    h += '</tbody></table></div>';
+  }
+
+  box.innerHTML = h;
+}
+
+
+// ───────────────────────────────────────────────────────────────
+// Die App wird zur echten Progressive Web App:
+//  • Manifest und Service Worker werden als Blob-URLs registriert — dadurch bleibt
+//    die App eine einzige HTML-Datei (keine externen Dateien nötig, funktioniert
+//    auf GitHub Pages ohne Zusatz-Deployment).
+//  • Der Service Worker cached HTML + externe CDN-Skripte (Firebase, QRCode-Lib +
+//    Google Fonts) beim ersten Besuch. Ab dann startet die App auch ohne Netz.
+//  • Firebase-Client puffert Schreibvorgänge automatisch, sobald keine Verbindung
+//    besteht, und sendet sie beim Reconnect. Ergebnis-Einträge gehen also NICHT
+//    verloren, wenn WLAN am Sportplatz kurz weg ist.
+//  • Ein sichtbarer Online/Offline-Indikator gibt Teams jederzeit Rückmeldung.
+// ═══════════════════════════════════════════════════════════════
+
+let _fbConnected = null;
+let _deferredInstallPrompt = null;
+
+// Online/Offline-Indikator: dezenter Punkt oben rechts. Kombiniert zwei Signale:
+//   1. navigator.onLine (Browser weiß, dass keine Verbindung besteht)
+//   2. Firebase-Verbindungsstatus (Server erreichbar / getrennt)
+// Zeigt bei Offline zusätzlich, dass Änderungen automatisch nach Reconnect gesynct
+// werden — damit Teams verstehen, dass ihre Ergebnisse NICHT verloren gehen.
+function updateConnectionIndicator(){
+  if(typeof document === 'undefined') return;
+  const el = document.getElementById('conn-indicator');
+  if(!el) return;
+  const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
+  if(!browserOnline){
+    el.className = 'conn-off';
+    el.title = 'Offline — Änderungen werden automatisch gespeichert und beim Reconnect gesendet.';
+    el.innerHTML = '<span class="conn-dot"></span> Offline';
+    return;
+  }
+  if(_fbConnected === false){
+    el.className = 'conn-warn';
+    el.title = 'Server nicht erreichbar — arbeitet weiter, synct sobald wieder verbunden.';
+    el.innerHTML = '<span class="conn-dot"></span> Server offline';
+    return;
+  }
+  el.className = 'conn-on';
+  el.title = 'Live verbunden.';
+  el.innerHTML = '<span class="conn-dot"></span> Live';
+}
+
+// Firebase-eigener .info/connected-Kanal — wird beim connectToTournament aufgerufen.
+function bindFirebaseConnectionListener(){
+  try {
+    fbdb.ref('.info/connected').on('value', snap => {
+      _fbConnected = !!snap.val();
+      updateConnectionIndicator();
+    });
+  } catch(e){ /* Firebase noch nicht bereit — später erneut versuchen */ }
+}
+
+// PWA-Install auslösen (falls Browser das unterstützt).
+function triggerPwaInstall(){
+  if(!_deferredInstallPrompt){
+    alert('Diese App ist bereits installiert oder dein Browser unterstützt keine Installation. Auf iOS: Teilen-Symbol → "Zum Home-Bildschirm".');
+    return;
+  }
+  _deferredInstallPrompt.prompt();
+  _deferredInstallPrompt.userChoice.finally(() => { _deferredInstallPrompt = null; });
+}
+
+// Setzt Manifest, registriert Service Worker, hängt Event-Listener ein. Wird EINMAL
+// beim App-Start aufgerufen (Ende der Datei). Wenn hier etwas fehlschlägt, läuft
+// die App weiter — Offline-Fähigkeit ist ein "nice to have", kein Muss.
+function setupPWA(){
+  try {
+    if(typeof document === 'undefined' || typeof URL === 'undefined' || typeof Blob === 'undefined') return;
+
+    // Web App Manifest als Blob (Icons per SVG-Data-URL — kein externer Icon-File).
+    const iconSvg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 192 192'>
+      <rect width='192' height='192' rx='36' fill='#0050A0'/>
+      <text x='96' y='118' text-anchor='middle' font-family='Arial Black,sans-serif' font-size='90' font-weight='900' fill='#fff'>SC</text>
+    </svg>`;
+    const iconDataUrl = 'data:image/svg+xml;base64,' + btoa(iconSvg);
+    const manifest = {
+      name: 'Schümmelcup — 1. FC Monheim',
+      short_name: 'Schümmelcup',
+      description: 'Turnier-Manager für Alte Herren',
+      start_url: '.',
+      scope: '.',
+      display: 'standalone',
+      orientation: 'portrait',
+      background_color: '#EEF3FA',
+      theme_color: '#00317A',
+      icons: [
+        { src: iconDataUrl, sizes: '192x192', type: 'image/svg+xml', purpose: 'any' },
+        { src: iconDataUrl, sizes: '512x512', type: 'image/svg+xml', purpose: 'any maskable' },
+      ],
+    };
+    const manifestBlob = new Blob([JSON.stringify(manifest)], { type: 'application/manifest+json' });
+    const manifestLink = document.createElement('link');
+    manifestLink.rel = 'manifest';
+    manifestLink.href = URL.createObjectURL(manifestBlob);
+    document.head.appendChild(manifestLink);
+
+    // Service Worker: kleine Cache-First-Strategie für App-Shell + CDN-Skripte.
+    // Firebase-Anfragen selbst dürfen NICHT gecached werden.
+    const swSource = `
+const CACHE = 'schuemmelcup-v1';
+const CDN_HOSTS = ['gstatic.com','cdnjs.cloudflare.com','fonts.googleapis.com','fonts.gstatic.com'];
+self.addEventListener('install', e => { self.skipWaiting(); });
+self.addEventListener('activate', e => { e.waitUntil(self.clients.claim()); });
+self.addEventListener('fetch', event => {
+  const url = new URL(event.request.url);
+  if(url.hostname.endsWith('firebaseio.com') || url.hostname.endsWith('firebasedatabase.app')) return;
+  if(CDN_HOSTS.some(h => url.hostname.endsWith(h))){
+    event.respondWith(caches.open(CACHE).then(cache =>
+      cache.match(event.request).then(cached => {
+        const network = fetch(event.request).then(resp => { if(resp.ok) cache.put(event.request, resp.clone()); return resp; }).catch(() => cached);
+        return cached || network;
+      })
+    ));
+    return;
+  }
+  if(event.request.mode === 'navigate' || event.request.destination === 'document'){
+    event.respondWith(
+      fetch(event.request).then(resp => {
+        const copy = resp.clone();
+        caches.open(CACHE).then(c => c.put(event.request, copy));
+        return resp;
+      }).catch(() => caches.match(event.request))
+    );
+  }
+});
+`;
+    if(typeof navigator !== 'undefined' && 'serviceWorker' in navigator){
+      const swBlob = new Blob([swSource], { type: 'application/javascript' });
+      const swUrl = URL.createObjectURL(swBlob);
+      navigator.serviceWorker.register(swUrl, { scope: './' }).catch(err => {
+        console.warn('Service Worker konnte nicht registriert werden:', err);
+      });
+    }
+
+    // Online/Offline-Events
+    if(typeof window !== 'undefined'){
+      window.addEventListener('online', updateConnectionIndicator);
+      window.addEventListener('offline', updateConnectionIndicator);
+
+      // PWA-Install-Prompt einfangen und in Button verwandeln
+      window.addEventListener('beforeinstallprompt', (e) => {
+        e.preventDefault();
+        _deferredInstallPrompt = e;
+        const btn = document.getElementById('pwa-install-btn');
+        if(btn) btn.style.display = 'inline-flex';
+      });
+      window.addEventListener('appinstalled', () => {
+        _deferredInstallPrompt = null;
+        const btn = document.getElementById('pwa-install-btn');
+        if(btn) btn.style.display = 'none';
+      });
+    }
+
+    updateConnectionIndicator();
+  } catch(e){
+    console.warn('PWA-Setup teilweise fehlgeschlagen (App läuft trotzdem):', e);
+  }
+}
+
+
 const LK = 'schuemmelcup_last_tournament'; // localStorage: zuletzt geöffnetes Turnier (nur ID)
 let TID = localStorage.getItem(LK) || null; // aktive Turnier-ID
 let fbRef = null;       // aktiver Firebase-Listener-Pfad
 let fbUnsub = null;     // Unsubscribe-Funktion
 let saveQueued = false; // Debounce-Flag für Schreibvorgänge
 let suppressNextSnapshot = false; // verhindert Echo nach eigenem Schreiben
+
+// ═══════════════════════════════════════════════════════════════
+// BACKUP-SYSTEM
+// ───────────────────────────────────────────────────────────────
+// Drei Sicherheitsnetze für den Spieltag:
+//  1) Auto-Snapshots alle 5 Min in localStorage (max. 20 Stück, älteste rotieren raus).
+//  2) Manueller Snapshot-Button (z.B. vor riskanten Admin-Aktionen).
+//  3) Vollständiger JSON-Export / -Import als Datei.
+// Ein Snapshot enthält ausschließlich den State — keine Live-Firebase-Bindung —
+// und lässt sich unabhängig wiederherstellen.
+// ═══════════════════════════════════════════════════════════════
+const SNAPSHOT_KEY_PREFIX = 'schuemmelcup_snap_'; // localStorage-Key pro Snapshot
+const SNAPSHOT_MAX = 20;                          // maximale Anzahl gehaltener Snapshots
+const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000;       // 5 Minuten
+let snapshotTimer = null;
+
+// Sammelt alle vorhandenen Snapshot-Keys sortiert (neuester zuerst).
+function listSnapshotKeys(){
+  const keys = [];
+  for(let i=0;i<localStorage.length;i++){
+    const k = localStorage.key(i);
+    if(k && k.startsWith(SNAPSHOT_KEY_PREFIX)) keys.push(k);
+  }
+  return keys.sort().reverse(); // Timestamps im Key → lexikografisch = chronologisch
+}
+
+// Schreibt einen Snapshot des aktuellen State + Meta ins localStorage. 'manual' markiert
+// vom Nutzer manuell ausgelöste Snapshots, damit sie in der UI hervorgehoben werden können.
+function createSnapshot(manual=false){
+  if(!TID || !S || !S.phase) return null;
+  const ts = new Date().toISOString();
+  const key = SNAPSHOT_KEY_PREFIX + ts + (manual?'_M':'_A');
+  const payload = { ts, tid:TID, name:S.meta?.name||'', phase:S.phase, manual, state:S };
+  try {
+    localStorage.setItem(key, JSON.stringify(payload));
+  } catch(e) {
+    // Wenn localStorage voll ist: älteste Snapshots aggressiver löschen und nochmal versuchen.
+    console.warn('Snapshot-Speicher voll, älteste werden gelöscht:', e);
+    const keys = listSnapshotKeys();
+    keys.slice(Math.floor(SNAPSHOT_MAX/2)).forEach(k => localStorage.removeItem(k));
+    try { localStorage.setItem(key, JSON.stringify(payload)); }
+    catch(e2){ console.error('Snapshot fehlgeschlagen:', e2); return null; }
+  }
+  // Rotation: alte Snapshots (über SNAPSHOT_MAX) löschen
+  const all = listSnapshotKeys();
+  all.slice(SNAPSHOT_MAX).forEach(k => localStorage.removeItem(k));
+  return key;
+}
+
+// Startet den Auto-Snapshot-Timer. Idempotent: mehrfacher Aufruf ist harmlos.
+function startSnapshotTimer(){
+  if(snapshotTimer) return;
+  snapshotTimer = setInterval(() => createSnapshot(false), SNAPSHOT_INTERVAL_MS);
+}
+
+// Vom Admin-UI aufgerufen: manueller Snapshot mit Nutzer-Feedback.
+function createManualSnapshot(){
+  const key = createSnapshot(true);
+  if(key){
+    alert('✓ Snapshot erstellt.');
+    renderSnapshotList();
+  } else {
+    alert('⚠ Snapshot konnte nicht erstellt werden. Ist ein Turnier geladen?');
+  }
+}
+
+// Rendert die Liste der lokalen Snapshots im Admin-Bereich mit Wiederherstellen-/Löschen-Buttons.
+function renderSnapshotList(){
+  const box = document.getElementById('adm-snapshot-list');
+  if(!box) return;
+  const keys = listSnapshotKeys();
+  if(!keys.length){
+    box.innerHTML = '<div style="color:var(--muted);font-style:italic;">Noch keine Snapshots vorhanden.</div>';
+    return;
+  }
+  box.innerHTML = keys.map(k => {
+    let meta;
+    try { meta = JSON.parse(localStorage.getItem(k)); }
+    catch(e){ return ''; }
+    const d = new Date(meta.ts);
+    const dateStr = d.toLocaleString('de-DE', {day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+    const flag = meta.manual ? '📸 Manuell' : '⏱ Auto';
+    const isMine = meta.tid === TID;
+    const label = meta.name || meta.tid;
+    return `<div style="display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--bg);">
+      <span style="min-width:120px;font-family:monospace;color:var(--muted);">${dateStr}</span>
+      <span style="flex:1;">${flag} · <strong>${esc(label)}</strong> <span style="color:var(--muted);font-size:11px;">(Phase: ${esc(meta.phase)})</span></span>
+      <button onclick="restoreSnapshot('${k}')" ${!isMine?'title="Anderes Turnier"':''} style="background:${isMine?'var(--green)':'var(--muted)'};color:#fff;border:none;padding:4px 10px;border-radius:4px;font-size:11px;cursor:pointer;">↺ Wiederherstellen</button>
+      <button onclick="deleteSnapshot('${k}')" style="background:transparent;color:var(--red);border:1px solid var(--red);padding:4px 8px;border-radius:4px;font-size:11px;cursor:pointer;">🗑</button>
+    </div>`;
+  }).join('');
+}
+
+// Snapshot löschen mit Bestätigung.
+function deleteSnapshot(key){
+  if(!confirm('Diesen Snapshot wirklich löschen?')) return;
+  localStorage.removeItem(key);
+  renderSnapshotList();
+}
+
+// Wiederherstellung: Snapshot lesen, State ersetzen, an Firebase spiegeln (Full-Save).
+// Vor der Aktion wird EIN aktueller Snapshot erstellt, damit auch eine falsche
+// Wiederherstellung noch rückgängig gemacht werden kann.
+function restoreSnapshot(key){
+  const raw = localStorage.getItem(key);
+  if(!raw){ alert('Snapshot nicht gefunden.'); return; }
+  let payload;
+  try { payload = JSON.parse(raw); }
+  catch(e){ alert('Snapshot ist beschädigt.'); return; }
+  if(payload.tid !== TID){
+    if(!confirm(`⚠ Achtung: Dieser Snapshot gehört zu Turnier "${payload.name||payload.tid}" (nicht zum aktuellen Turnier ${TID}).\n\nMöchtest du wirklich fortfahren? Der aktuelle Turnierstand wird überschrieben.`)) return;
+  } else {
+    if(!confirm(`Snapshot vom ${new Date(payload.ts).toLocaleString('de-DE')} wiederherstellen?\n\nDer aktuelle Turnierstand wird überschrieben. Zur Sicherheit wird vorher ein neuer Snapshot des jetzigen Zustands erstellt.`)) return;
+  }
+  createSnapshot(true); // Sicherheits-Snapshot des JETZIGEN Standes
+  suppressNextSnapshot = true; // verhindert Echo-Load der eigenen Änderung
+  S = payload.state;
+  save(); // schreibt an Firebase (Full-Save)
+  renderAll();
+  alert('✓ Snapshot wiederhergestellt.');
+}
+
+// Manueller JSON-Export als Datei-Download.
+function exportBackup(){
+  if(!TID || !S){ alert('Kein Turnier geladen.'); return; }
+  const payload = { ts:new Date().toISOString(), tid:TID, name:S.meta?.name||'', appVersion:'schuemmelcup-1', state:S };
+  const blob = new Blob([JSON.stringify(payload, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const safeName = (S.meta?.name||TID).replace(/[^a-z0-9_-]+/gi,'_');
+  const dateStr = new Date().toISOString().slice(0,19).replace(/[:T]/g,'-');
+  a.href = url;
+  a.download = `schuemmelcup_${safeName}_${dateStr}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+// JSON-Import via File-Input. Validiert die Struktur grob, bevor der State ersetzt wird.
+function importBackup(event){
+  const file = event.target.files?.[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    let payload;
+    try { payload = JSON.parse(e.target.result); }
+    catch(err){ alert('❌ Datei ist keine gültige JSON.'); return; }
+    if(!payload.state || !payload.state.phase){
+      alert('❌ Datei enthält keinen gültigen Schümmelcup-Turnierstand.');
+      return;
+    }
+    const info = `Turnier: ${payload.name||payload.tid||'(unbenannt)'}\nStand vom: ${payload.ts?new Date(payload.ts).toLocaleString('de-DE'):'unbekannt'}\nPhase: ${payload.state.phase}`;
+    if(!confirm(`Diesen Turnierstand importieren?\n\n${info}\n\n⚠ Der AKTUELLE Turnierstand wird überschrieben (Sicherheits-Snapshot wird vorher erstellt).`)) return;
+    createSnapshot(true);
+    suppressNextSnapshot = true;
+    S = payload.state;
+    save();
+    renderAll();
+    alert('✓ Turnierstand importiert.');
+  };
+  reader.onerror = () => alert('❌ Datei konnte nicht gelesen werden.');
+  reader.readAsText(file);
+  event.target.value = ''; // Input zurücksetzen, damit dieselbe Datei erneut wählbar ist
+}
 
 function dflt(){
   return {
@@ -669,6 +1280,8 @@ function connectToTournament(id, isNew=false, initialState=null){
       localStorage.removeItem(ATK);
     }
     renderAll();
+    startSnapshotTimer(); // Auto-Snapshots erst starten, wenn Turnier tatsächlich verbunden ist
+    bindFirebaseConnectionListener(); // Online/Offline-Indikator mit Firebase-Verbindung koppeln
   }, err => {
     console.error('Firebase Lesefehler:', err);
     document.getElementById('conn-status').innerHTML = '⚠ Verbindungsfehler: '+err.message;
@@ -707,6 +1320,11 @@ function disconnectTournament(){
 }
 
 // ── Schreiben: gesamten State an Firebase senden (debounced) ──
+// save() ist der Fallback für STRUKTURELLE Änderungen (neues Turnier, KO-Runde
+// generieren, Kader ändern, ...). Für einzelne Ergebniseinträge nutze IMMER die
+// spezialisierten Funktionen weiter unten (saveMatch), damit sich parallel
+// eintragende Teams NICHT gegenseitig überschreiben ("last write wins" wird so auf
+// Match-Ebene isoliert).
 const raf = typeof requestAnimationFrame === 'function' ? requestAnimationFrame : (fn)=>setTimeout(fn, 16);
 function save(){
   if(!TID) return;
@@ -717,6 +1335,73 @@ function save(){
     fbdb.ref('tournaments/'+TID).set(S).catch(err=>{
       console.error('Firebase save error:', err);
     });
+  });
+}
+
+// Schreibt NUR den einen betroffenen Match-Knoten (Gruppen- oder KO-Match). Bei
+// KO-Änderungen zusätzlich die Nachfolge-Runden, weil propKO() Sieger weiterreicht
+// (mehrere Match-Knoten betroffen) — das geschieht als atomares Multi-Location-Update
+// via ref.update({...}), sodass entweder alles oder nichts landet.
+//
+// Diese Isolation ist der entscheidende Fix für den Alltag am Spielfeldrand: zwei
+// Teams, die zeitgleich ihr Ergebnis speichern, treffen sich nicht mehr in einem
+// gemeinsamen Schreibvorgang und überschreiben sich nicht.
+function saveMatchInGroup(gi, matchId){
+  if(!TID) return;
+  const match = (S.groupMatches[gi]||[]).find(m=>m.id===matchId);
+  if(!match) return;
+  const idx = S.groupMatches[gi].findIndex(m=>m.id===matchId);
+  const path = `tournaments/${TID}/groupMatches/${gi}/${idx}`;
+  fbdb.ref(path).set(match).catch(err=>{
+    console.error('Firebase saveMatchInGroup error:', err);
+    // Fallback: kompletten State schreiben, damit keine Daten verloren gehen
+    save();
+  });
+}
+
+// Analog für KO-Matches + Platzierungsspiele. Weil propKO() nach einem KO-Ergebnis
+// auch Home/Away der Folgerunde ändert, wird hier ein MEHRPFAD-Update gemacht:
+// betroffener Match + gesamte Folgerunde + placementGames (falls Bronze/Platz-5-8
+// abhängen). Das schreibt Firebase atomar und ohne den unbetroffenen State zu
+// überschreiben.
+function saveMatchInKO(matchId){
+  if(!TID) return;
+  const updates = {};
+  // Betroffenen KO-Match finden
+  let foundRoundIdx = -1;
+  S.koRounds.forEach((r, ri) => {
+    const midx = r.matches.findIndex(m=>m.id===matchId);
+    if(midx>=0){
+      foundRoundIdx = ri;
+      updates[`koRounds/${ri}/matches/${midx}`] = r.matches[midx];
+    }
+  });
+  // Wenn im KO gefunden: Folgerunden mit-updaten (weil propKO Sieger weitergereicht hat)
+  if(foundRoundIdx >= 0){
+    for(let ri = foundRoundIdx+1; ri < S.koRounds.length; ri++){
+      S.koRounds[ri].matches.forEach((m, mi) => {
+        updates[`koRounds/${ri}/matches/${mi}`] = m;
+      });
+    }
+    // Placement-Games mit updaten (Verlierer-Info könnte sich geändert haben)
+    (S.placementGames||[]).forEach((pg, pi) => {
+      pg.matches.forEach((m, mi) => {
+        updates[`placementGames/${pi}/matches/${mi}`] = m;
+      });
+    });
+  } else {
+    // Sonst in placementGames suchen (das eigentliche Match liegt dort)
+    (S.placementGames||[]).forEach((pg, pi) => {
+      const midx = pg.matches.findIndex(m=>m.id===matchId);
+      if(midx >= 0){
+        updates[`placementGames/${pi}/matches/${midx}`] = pg.matches[midx];
+      }
+    });
+  }
+  if(!Object.keys(updates).length) return;
+  fbdb.ref('tournaments/'+TID).update(updates).catch(err=>{
+    console.error('Firebase saveMatchInKO error:', err);
+    save(); // Fallback
   });
 }
 
@@ -877,7 +1562,7 @@ function showView(v){
   document.querySelectorAll('#main-nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===v));
   render(v);
 }
-function render(v){ ({overview:renderOv,groups:renderGrp,knockout:renderKO,schedule:renderSch,stats:renderStats,admin:renderAdm})[v]?.(); }
+function render(v){ ({overview:renderOv,groups:renderGrp,knockout:renderKO,schedule:renderSch,stats:renderStats,admin:renderAdm,hof:renderHoF})[v]?.(); }
 function renderAll(){ render(curView); }
 
 // ═══════════════════════════════════════════════════════════════
@@ -1399,7 +2084,11 @@ function toggleEF(id){ document.getElementById('ef-'+id)?.classList.toggle('open
 // ═══════════════════════════════════════════════════════════════
 // SAVE MATCH → locks immediately
 // ═══════════════════════════════════════════════════════════════
-function doSave(id, pool, afterFn, isKO=false){
+// context: 'group' | 'ko'  – bestimmt, welche isolierte Save-Funktion nach dem
+// Update aufgerufen wird. Bei 'group' schreiben wir NUR den einen Match-Knoten,
+// damit paralleles Speichern zweier Teams sich nicht in die Quere kommt. Bei 'ko'
+// schreiben wir zusätzlich die abhängigen Nachfolgerunden (propKO() ändert die).
+function doSave(id, pool, afterFn, isKO=false, context=null){
   const h=document.getElementById('h-'+id)?.value??'';
   const a=document.getElementById('a-'+id)?.value??'';
   const t=document.getElementById('t-'+id)?.value??'';
@@ -1428,7 +2117,15 @@ function doSave(id, pool, afterFn, isKO=false){
   }
   Object.assign(m,{h,a,time:t,locked:true,hp,ap});
   afterFn();
-  save();
+  // Isolierter Save je nach Kontext — bei unbekanntem Kontext Fallback auf Full-Save.
+  if(context==='group'){
+    const gi = Object.keys(S.groupMatches).find(k => S.groupMatches[k]===pool);
+    if(gi!==undefined) saveMatchInGroup(gi, id); else save();
+  } else if(context==='ko'){
+    saveMatchInKO(id);
+  } else {
+    save();
+  }
   const ok=document.getElementById('ok-'+id);
   if(ok){ok.style.display='block';setTimeout(()=>ok.style.display='none',3000);}
   renderAll();
@@ -1437,7 +2134,7 @@ function saveGM(id){
   for(const gi in S.groupMatches){
     const m=S.groupMatches[gi].find(x=>x.id===id);
     if(m){
-      doSave(id,S.groupMatches[gi],()=>{},false);
+      doSave(id,S.groupMatches[gi],()=>{},false,'group');
       checkAutoGenerateKO();
       return;
     }
@@ -1458,17 +2155,27 @@ function checkAutoGenerateKO(){
 function saveKO(id){
   for(const ri in S.koRounds){
     const m=S.koRounds[ri].matches.find(x=>x.id===id);
-    if(m){ doSave(id,S.koRounds[ri].matches,()=>propKO(),true); return; }
+    if(m){ doSave(id,S.koRounds[ri].matches,()=>propKO(),true,'ko'); return; }
   }
   for(const pg of (S.placementGames||[])){
     const m=pg.matches.find(x=>x.id===id);
-    if(m){ doSave(id,pg.matches,()=>propKO(),true); return; }
+    if(m){ doSave(id,pg.matches,()=>propKO(),true,'ko'); return; }
   }
 }
 function unlockMatch(id){
-  for(const gi in S.groupMatches){ const m=S.groupMatches[gi].find(x=>x.id===id); if(m){m.locked=false;save();renderAll();return;} }
-  for(const ri in S.koRounds){ const m=S.koRounds[ri].matches.find(x=>x.id===id); if(m){m.locked=false;save();renderAll();return;} }
-  for(const pg of (S.placementGames||[])){ const m=pg.matches.find(x=>x.id===id); if(m){m.locked=false;save();renderAll();return;} }
+  // Freigabe (Admin-Aktion) — nur ein Feld ändert sich, isoliert speichern.
+  for(const gi in S.groupMatches){
+    const m=S.groupMatches[gi].find(x=>x.id===id);
+    if(m){ m.locked=false; saveMatchInGroup(gi, id); renderAll(); return; }
+  }
+  for(const ri in S.koRounds){
+    const m=S.koRounds[ri].matches.find(x=>x.id===id);
+    if(m){ m.locked=false; saveMatchInKO(id); renderAll(); return; }
+  }
+  for(const pg of (S.placementGames||[])){
+    const m=pg.matches.find(x=>x.id===id);
+    if(m){ m.locked=false; saveMatchInKO(id); renderAll(); return; }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2622,6 +3329,36 @@ function renderAdm(){
   document.getElementById('adm-roster').innerHTML = '<div class="sec-title" style="margin-bottom:10px;">Kaderverwaltung (Admin-Override)</div>'
     + '<p style="font-size:13px;color:var(--muted);margin-bottom:10px;">Teams tragen ihre Spieler normalerweise selbst beim ersten Login ein. Hier kannst du als Admin Kader einsehen oder nachträglich korrigieren.</p>'
     + renderRosterEditor();
+
+  renderSnapshotList();
+
+  // Archiv-Status: erklärt, ob und warum "abschließen" möglich ist
+  const archiveStatus = document.getElementById('adm-archive-status');
+  const finishBtn = document.getElementById('btn-finish-tournament');
+  if(archiveStatus && finishBtn){
+    if(S.phase === 'done'){
+      archiveStatus.innerHTML = '<span style="color:var(--green);font-weight:600;">✓ Dieses Turnier ist bereits abgeschlossen und archiviert.</span>';
+      finishBtn.disabled = true;
+      finishBtn.style.opacity = '0.5';
+      finishBtn.style.cursor = 'not-allowed';
+    } else if(S.phase !== 'ko'){
+      archiveStatus.innerHTML = '<span style="color:var(--muted);">Erst nach Ende der KO-Runde möglich (aktuell: Phase „' + esc(S.phase) + '").</span>';
+      finishBtn.disabled = true;
+      finishBtn.style.opacity = '0.5';
+      finishBtn.style.cursor = 'not-allowed';
+    } else {
+      const koRounds = S.koRounds || [];
+      const finalMatch = koRounds.length ? koRounds[koRounds.length-1].matches.find(m=>!m.isFrei) : null;
+      if(finalMatch && finalMatch.winner){
+        archiveStatus.innerHTML = '<span style="color:var(--green);">✓ Finale entschieden: <strong>' + esc(finalMatch.winner) + '</strong> gewinnt. Bereit zum Abschließen.</span>';
+      } else {
+        archiveStatus.innerHTML = '<span style="color:var(--orange);">⚠ Das Finale ist noch nicht entschieden. Abschluss ist trotzdem möglich, dann aber ohne finale Endplatzierung.</span>';
+      }
+      finishBtn.disabled = false;
+      finishBtn.style.opacity = '1';
+      finishBtn.style.cursor = 'pointer';
+    }
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2635,7 +3372,8 @@ function unlockAdmin(){
 function lockAdmin(){ localAdminUnlocked=false;renderAdm();renderOv(); }
 function resetAll(){
   if(!confirm('Turnier wirklich zurücksetzen? Alle Daten (Teams, Ergebnisse, Kader) werden unwiderruflich gelöscht.'))return;
-  if(!confirm('Bist du WIRKLICH sicher? Dies kann nicht rückgängig gemacht werden.'))return;
+  if(!confirm('Bist du WIRKLICH sicher? Dies kann nicht rückgängig gemacht werden.\n\nZur Sicherheit wird vorher ein Snapshot des jetzigen Zustands erstellt (im Admin-Bereich wiederherstellbar).'))return;
+  createSnapshot(true); // Rettungsanker vor destruktiver Aktion
   S=dflt();activeTeam=null;localStorage.removeItem(ATK);save();
   document.getElementById('team-banner').style.display='none';
   showView('overview');
@@ -2644,6 +3382,9 @@ function resetAll(){
 // ═══════════════════════════════════════════════════════════════
 // INIT
 // ═══════════════════════════════════════════════════════════════
+// PWA-Setup zuerst (Manifest, Service Worker, Online-Indikator) — nicht-kritisch,
+// wenn es fehlschlägt läuft die App trotzdem.
+setupPWA();
 // initApp() kommt aus gate_js.js — verbindet zu Firebase-Turnier oder zeigt Gate
 initApp();
 
