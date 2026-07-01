@@ -1202,6 +1202,23 @@ function roundRobinRounds(teams){
   return rounds;
 }
 
+// Kurzname einer KO-Runde für Platzhalter-Texte ("Sieger VF 1", "Verlierer HF 2" ...)
+function koShortName(name){
+  return ({Viertelfinale:'VF', Halbfinale:'HF', Achtelfinale:'AF', '1/16-Finale':'1/16', Finale:'Finale'})[name] || name;
+}
+// Anzeigename einer Spielseite: echter Teamname, sonst Platzhalter-Herkunft, sonst "?".
+// (homeFrom/awayFrom = "Sieger VF 1" o.ä. ab Runde 2; homeOrigin = "Sieger Gr. A" in Runde 1)
+function teamLabel(m, side){
+  const name = side==='home' ? m.home : m.away;
+  if(name && name!=='?') return name;
+  const from = side==='home' ? (m.homeFrom||m.homeOrigin) : (m.awayFrom||m.awayOrigin);
+  return from || '?';
+}
+function isPlaceholderSide(m, side){
+  const name = side==='home' ? m.home : m.away;
+  return !name || name==='?';
+}
+
 // ═══════════════════════════════════════════════════════════════
 // MATCH EVENTS (Tore / Karten)
 // ═══════════════════════════════════════════════════════════════
@@ -1232,8 +1249,8 @@ function addEventBoxHTML(m){
     return `<div class="add-event-box"><div class="no-roster-hint">Keine Spieler hinterlegt. Kader können im Admin-Bereich → Kader verwaltet werden.</div></div>`;
   }
   const teamOpts = `
-    <option value="home">${esc(m.home)}</option>
-    <option value="away">${esc(m.away)}</option>`;
+    <option value="home">${esc(teamLabel(m,'home'))}</option>
+    <option value="away">${esc(teamLabel(m,'away'))}</option>`;
   return `<div class="add-event-box" id="aeb-${m.id}">
     <div style="font-size:12px;font-weight:700;color:var(--orange);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px;">⚽ Tor / Karte hinzufügen</div>
     <div class="add-event-row">
@@ -1311,7 +1328,11 @@ function mcHTML(m, saveFn, showQRBtn=false){
   const played = m.h!==''&&m.a!=='';
   const locked = m.locked && !localAdminUnlocked;
   const isMyMatch = activeTeam && (m.home===activeTeam||m.away===activeTeam);
-  const canEdit  = (localAdminUnlocked || (isMyMatch && !locked));
+  // Anzeigenamen (echtes Team oder Platzhalter "Sieger VF 1" / "Verlierer HF 2")
+  const hN = teamLabel(m,'home'), aN = teamLabel(m,'away');
+  // Solange ein Teilnehmer noch nicht feststeht ("?"), kann das Spiel nicht eingetragen werden.
+  const teamsKnown = !isPlaceholderSide(m,'home') && !isPlaceholderSide(m,'away');
+  const canEdit  = teamsKnown && (localAdminUnlocked || (isMyMatch && !locked));
   const homeHl = activeTeam&&m.home===activeTeam?' hl':'';
   const awayHl = activeTeam&&m.away===activeTeam?' hl':'';
   const cardCls = ['mc',played?'played':'',m.locked?'locked':'',isMyMatch&&!played?'mine':''].filter(Boolean).join(' ');
@@ -1329,18 +1350,18 @@ function mcHTML(m, saveFn, showQRBtn=false){
   const isKO = saveFn==='saveKO';
   const penHTML = isKO ? `
       <div class="ef-row" style="margin-top:-2px;">
-        <div class="ef-field"><label>Elfm. ${esc(m.home)}</label><input type="number" min="0" class="si" id="hp-${m.id}" value="${m.hp??''}" placeholder="–"></div>
+        <div class="ef-field"><label>Elfm. ${esc(hN)}</label><input type="number" min="0" class="si" id="hp-${m.id}" value="${m.hp??''}" placeholder="–"></div>
         <div style="font-size:20px;font-weight:800;color:var(--muted);padding-bottom:6px;">:</div>
-        <div class="ef-field"><label>Elfm. ${esc(m.away)}</label><input type="number" min="0" class="si" id="ap-${m.id}" value="${m.ap??''}" placeholder="–"></div>
+        <div class="ef-field"><label>Elfm. ${esc(aN)}</label><input type="number" min="0" class="si" id="ap-${m.id}" value="${m.ap??''}" placeholder="–"></div>
         <div class="ef-field" style="flex:2;display:flex;align-items:flex-end;"><span style="font-size:11px;color:var(--muted);line-height:1.3;">⚽ Nur bei Unentschieden ausfüllen<br>(Elfmeterschießen entscheidet)</span></div>
       </div>` : '';
 
   const efHTML = canEdit ? `
     <div class="ef" id="ef-${m.id}">
       <div class="ef-row">
-        <div class="ef-field"><label>${esc(m.home)}</label><input type="number" min="0" class="si" id="h-${m.id}" value="${m.h}" placeholder="0"></div>
+        <div class="ef-field"><label>${esc(hN)}</label><input type="number" min="0" class="si" id="h-${m.id}" value="${m.h}" placeholder="0"></div>
         <div style="font-size:20px;font-weight:800;color:var(--muted);padding-bottom:6px;">:</div>
-        <div class="ef-field"><label>${esc(m.away)}</label><input type="number" min="0" class="si" id="a-${m.id}" value="${m.a}" placeholder="0"></div>
+        <div class="ef-field"><label>${esc(aN)}</label><input type="number" min="0" class="si" id="a-${m.id}" value="${m.a}" placeholder="0"></div>
         <div class="ef-field"><label>Anstoßzeit</label><input type="time" id="t-${m.id}" value="${m.time||''}"></div>
       </div>
       ${penHTML}
@@ -1356,9 +1377,9 @@ function mcHTML(m, saveFn, showQRBtn=false){
 
   return `<div class="${cardCls}" id="mc-${m.id}">
     <div class="mc-row">
-      <div class="mc-team${homeHl}">${esc(m.home)}</div>
+      <div class="mc-team${homeHl}"${isPlaceholderSide(m,'home')?' style="color:var(--muted);font-style:italic;font-weight:600;"':''}>${esc(hN)}</div>
       <div class="mc-score${played?' played':''}">${played?(m.h+' : '+m.a+((isDrawScore(m)&&hasPens(m))?` <span style="font-size:.6em;color:var(--muted);vertical-align:middle;">(${m.hp}:${m.ap} n.E.)</span>`:'')):'– : –'}</div>
-      <div class="mc-team away${awayHl}">${esc(m.away)}</div>
+      <div class="mc-team away${awayHl}"${isPlaceholderSide(m,'away')?' style="color:var(--muted);font-style:italic;font-weight:600;"':''}>${esc(aN)}</div>
     </div>
     <div class="mc-meta">
       ${m.time?'🕐 '+m.time:''}${m.field?' · Feld '+m.field:''}
@@ -1675,6 +1696,55 @@ function scheduleMatchList(matches, startTime, matchDuration, numFields){
   });
 }
 
+// Plant ALLE KO-Spiele (reguläre Runden + Platzierungsspiele) konfliktfrei auf die
+// vorhandenen KO-Felder. Kernregeln:
+//  • Ein Spiel der Runde i darf frühestens beginnen, wenn Runde i-1 komplett fertig ist
+//    (die Sieger/Verlierer stehen erst dann fest).
+//  • Ein Platzierungsspiel läuft im Zeitfenster der Runde, die auf SEINE Quellrunde folgt
+//    (z.B. "Spiel um Platz 3" rund ums Finale) — und damit garantiert NIE vor dem
+//    Halbfinale. Im Finalfenster werden Platzierungsspiele zuerst gelegt, damit das
+//    Finale das letzte Spiel bleibt.
+//  • Kein Feld wird doppelt belegt: jedes Feld hat eine eigene "frei-ab"-Zeit, die über
+//    alle Runden hinweg fortgeschrieben wird.
+function scheduleKOPhase(koRounds, placementGames, sched, durationForRound, startTime){
+  if(!koRounds || !koRounds.length) return;
+  const F = Math.max(1, sched.fieldsKO|0);
+  const toMin = (t)=>{ const [h,m]=String(t).split(':').map(Number); return h*60+m; };
+  const toHHMM = (mins)=>{ const hh=Math.floor(mins/60)%24, mm=mins%60; return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
+
+  // Platzierungsspiele nach Index ihrer Quellrunde gruppieren
+  const placByIdx = {};
+  (placementGames||[]).forEach(pg=>{
+    const idx = koRounds.findIndex(r=>r.name===pg.sourceRound);
+    if(idx>=0) (placByIdx[idx]=placByIdx[idx]||[]).push(pg);
+  });
+
+  const fieldFree = Array(F).fill(toMin(startTime)); // wird über alle Runden hinweg fortgeschrieben
+  let mainGate = toMin(startTime);                   // Runde i frühestens ab hier (Abhängigkeit)
+
+  koRounds.forEach((round, ri)=>{
+    const isLast = ri===koRounds.length-1;
+    const roundUnits = round.matches.filter(m=>!m.isFrei).map(m=>({m, dur:durationForRound(round.name), main:true}));
+    // Platzierungsspiele, deren Verlierer aus der VORHERIGEN Runde kommen, laufen hier.
+    const placUnits = (placByIdx[ri-1]||[]).flatMap(pg=>pg.matches.map(m=>({m, dur:durationForRound(pg.label), main:false})));
+    // Hauptspiele zuerst (Folgerunde hängt davon ab) — außer im Finalfenster.
+    const units = isLast ? [...placUnits, ...roundUnits] : [...roundUnits, ...placUnits];
+
+    let roundEnd = mainGate;
+    units.forEach(u=>{
+      let f=0; for(let i=1;i<F;i++) if(fieldFree[i]<fieldFree[f]) f=i;
+      // Hauptspiele zusätzlich durch mainGate (Abhängigkeit) begrenzt; Platzierungsspiele
+      // nur durch Feld-Verfügbarkeit (ihre Quellrunde ist in diesem Fenster bereits vorbei).
+      const start = u.main ? Math.max(fieldFree[f], mainGate) : fieldFree[f];
+      u.m.time = toHHMM(start);
+      u.m.field = f+1;
+      fieldFree[f] = start + u.dur;
+      if(u.main) roundEnd = Math.max(roundEnd, start + u.dur);
+    });
+    mainGate = roundEnd; // nächste Runde beginnt nach Ende DIESER Hauptrunde
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════
 // ROSTER (Kaderverwaltung) — in Admin
 // ═══════════════════════════════════════════════════════════════
@@ -1804,9 +1874,10 @@ function buildKO(){
   S.koRounds=mkBracket(seeded);
   generatePlacementGames(); // erzeugt S.placementGames basierend auf S.placement.selected
 
-  // KO-Zeitplan: automatisch ab Ende der Gruppenphase, jede Runde nacheinander.
-  // Pro Runde wird geprüft, ob eine abweichende Dauer in S.koTiming.perRound hinterlegt ist
-  // (z.B. "Finale" länger oder mit 2 Halbzeiten) — sonst gilt die Standard-Dauer aus S.schedule.
+  // KO-Zeitplan: automatisch ab Ende der Gruppenphase. Reguläre Runden UND
+  // Platzierungsspiele werden gemeinsam konfliktfrei auf die KO-Felder verteilt
+  // (siehe scheduleKOPhase) — kein Feld doppelt, Platzierungsspiele nie vor ihrer
+  // Quellrunde. Pro Runde kann eine abweichende Dauer in S.koTiming.perRound liegen.
   const sched = S.schedule;
   if(sched){
     const durationForRound = (roundName) => {
@@ -1816,25 +1887,8 @@ function buildKO(){
       return pure + (override.gapLen ?? sched.gapLen);
     };
     const allGM = Object.values(S.groupMatches).flat();
-    let nextStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
-    const roundEndTime = {}; // Rundenname → tatsächliche Endzeit dieser Runde
-    S.koRounds.forEach(round=>{
-      const playable = round.matches.filter(m=>!m.isFrei);
-      const dur = durationForRound(round.name);
-      scheduleMatchList(playable, nextStart, dur, sched.fieldsKO);
-      const end = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
-      roundEndTime[round.name] = end;
-      nextStart = end;
-    });
-    // Platzierungsspiele NACH dem tatsächlichen Ende der jeweiligen Quellrunde einplanen.
-    // (Vorher wurde als Startzeit fälschlich die erste Anstoßzeit genutzt — dadurch
-    // landeten z.B. "Spiel um Platz 3" mitten in der Gruppenphase.)
-    (S.placementGames||[]).forEach(pg=>{
-      const sourceEnd = roundEndTime[pg.sourceRound];
-      if(!sourceEnd) return;
-      const dur = durationForRound(pg.label);
-      scheduleMatchList(pg.matches, sourceEnd, dur, sched.fieldsKO);
-    });
+    const koStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+    scheduleKOPhase(S.koRounds, S.placementGames, sched, durationForRound, koStart);
   }
 
   S.phase='knockout'; save(); renderAll(); showView('knockout');
@@ -1872,12 +1926,13 @@ function mkBracket(q){
   };
   const rounds=[]; let cur=p,ri=0;
   while(cur.length>1){
+    const roundName = names[cur.length]||'Runde '+(ri+1);
     const ms=[];
     for(let i=0;i<cur.length;i+=2){
       const origin1 = ri===0 ? originLabel(cur[i]) : null;
       const origin2 = ri===0 ? originLabel(cur[i+1]) : null;
       // Falls team-Name noch ein Platzhalter ist (null, weil Gruppe noch nicht final),
-      // wird der Origin-Text ("Sieger Gr. A") selbst zur Hauptanzeige statt nur "?".
+      // wird der Origin-Text ("Sieger Gr. A") in Runde 1 selbst zur Hauptanzeige statt "?".
       const t1 = cur[i]?.team || (origin1 || '?');
       const t2 = cur[i+1]?.team || (origin2 || '?');
       const isF=t1==='Freilos'||t2==='Freilos';
@@ -1885,13 +1940,21 @@ function mkBracket(q){
         id:uid(),home:t1,away:t2,h:'',a:'',time:'',locked:false,hp:'',ap:'',
         winner:isF?(t1!=='Freilos'?t1:t2):null,loser:null,isFrei:isF,events:[],
         // Origin nur als Untertitel zeigen, wenn der Hauptname bereits ein echter Teamname ist
-        // (sonst wäre es doppelt, weil der Origin-Text schon die Hauptanzeige ist)
         homeOrigin: (ri===0 && cur[i]?.team) ? origin1 : null,
-        awayOrigin: (ri===0 && cur[i+1]?.team) ? origin2 : null
+        awayOrigin: (ri===0 && cur[i+1]?.team) ? origin2 : null,
+        // Ab Runde 2: Platzhalter-Herkunft ("Sieger VF 1"), solange der Gewinner offen ist —
+        // home/away bleiben '?' (Sentinel), die Anzeige nutzt homeFrom/awayFrom.
+        homeFrom: (ri>0 && !cur[i]?.team) ? (cur[i]?.from || null) : null,
+        awayFrom: (ri>0 && !cur[i+1]?.team) ? (cur[i+1]?.from || null) : null
       });
     }
-    rounds.push({name:names[cur.length]||'Runde '+(ri+1),matches:ms});
-    cur=ms.map(m=>({team:m.winner||'?'})); ri++; if(cur.length===1)break;
+    rounds.push({name:roundName,matches:ms});
+    // Für die NÄCHSTE Runde: echten Gewinner mitführen, sonst Platzhalter "Sieger <Runde> <Nr>".
+    cur=ms.map((m,idx)=>({
+      team:(m.winner && m.winner!=='Freilos') ? m.winner : null,
+      from:`Sieger ${koShortName(roundName)} ${idx+1}`
+    }));
+    ri++; if(cur.length===1)break;
   }
   return rounds;
 }
@@ -1927,8 +1990,13 @@ function generatePlacementGames(){
     const opt = opts.find(o=>o.key===key);
     if(!opt) return;
     const matches = [];
+    const short = koShortName(opt.sourceRound);
     for(let i=0;i<opt.numGames;i++){
-      matches.push({id:uid(),home:'?',away:'?',h:'',a:'',time:'',locked:false,winner:null,loser:null,isFrei:false,events:[]});
+      matches.push({
+        id:uid(),home:'?',away:'?',
+        homeFrom:`Verlierer ${short} ${i*2+1}`, awayFrom:`Verlierer ${short} ${i*2+2}`,
+        h:'',a:'',time:'',locked:false,hp:'',ap:'',winner:null,loser:null,isFrei:false,events:[]
+      });
     }
     games.push({ key:opt.key, sourceRound:opt.sourceRound, label:opt.label, resultLabel:opt.resultLabel, matches });
   });
@@ -2148,7 +2216,7 @@ function exportSchedulePDF(){
       r.matches.forEach(m=>{
         if(m.isFrei) return;
         const played = m.h!==''&&m.a!=='';
-        html += `<tr><td>${esc(r.name)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td class="${m.winner===m.home?'win':''}">${esc(m.home)}</td><td>${played?scoreText(m):'–:–'}</td><td class="${m.winner===m.away?'win':''}">${esc(m.away)}</td></tr>`;
+        html += `<tr><td>${esc(r.name)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td class="${m.winner&&m.winner===m.home?'win':''}">${esc(teamLabel(m,'home'))}</td><td>${played?scoreText(m):'–:–'}</td><td class="${m.winner&&m.winner===m.away?'win':''}">${esc(teamLabel(m,'away'))}</td></tr>`;
       });
     });
     html += `</tbody></table>`;
@@ -2160,7 +2228,7 @@ function exportSchedulePDF(){
     S.placementGames.forEach(pg=>{
       pg.matches.forEach(m=>{
         const played = m.h!==''&&m.a!=='';
-        html += `<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.home)}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(m.away)}</td></tr>`;
+        html += `<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(teamLabel(m,'home'))}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(teamLabel(m,'away'))}</td></tr>`;
       });
     });
     html += `</tbody></table>`;
@@ -2192,28 +2260,28 @@ function buildKOPreviewWithTiming(){
   };
 
   const allGM = Object.values(S.groupMatches).flat();
-  let nextStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
-  const roundEndTime = {};
-  previewKO.forEach(round=>{
-    const playable = round.matches.filter(m=>!m.isFrei);
-    const dur = durationForRound(round.name);
-    scheduleMatchList(playable, nextStart, dur, sched.fieldsKO);
-    const end = latestMatchEnd(playable, dur, sched.fieldsKO, nextStart);
-    roundEndTime[round.name] = end;
-    nextStart = end;
-  });
+  const koStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
 
-  // Platzierungsspiele-Vorschau (mit Platzhaltern, da Verlierer noch nicht feststehen)
+  // Platzierungsspiele-Vorschau (mit Platzhaltern, da Verlierer noch nicht feststehen).
+  // sourceRound wird mitgegeben, damit der Planer sie korrekt ins Zeitfenster der
+  // Folgerunde legt (nie vor der Quellrunde).
   const placementOpts = availablePlacementOptions(previewKO).filter(o => (S.placement?.selected||[]).includes(o.key));
   const previewPlacements = placementOpts.map(opt=>{
-    const sourceEnd = roundEndTime[opt.sourceRound] || nextStart;
+    const short = koShortName(opt.sourceRound);
     const matches = [];
     for(let i=0;i<opt.numGames;i++){
-      matches.push({id:'preview_'+opt.key+'_'+i, home:`Verlierer ${opt.sourceRound}`, away:`Verlierer ${opt.sourceRound}`, h:'', a:'', time:'', locked:false, isFrei:false});
+      matches.push({
+        id:'preview_'+opt.key+'_'+i,
+        home:'?', away:'?',
+        homeFrom:`Verlierer ${short} ${i*2+1}`, awayFrom:`Verlierer ${short} ${i*2+2}`,
+        h:'', a:'', time:'', locked:false, isFrei:false
+      });
     }
-    scheduleMatchList(matches, sourceEnd, durationForRound(opt.label), sched.fieldsKO);
-    return { key:opt.key, label:opt.label, matches };
+    return { key:opt.key, sourceRound:opt.sourceRound, label:opt.label, matches };
   });
+
+  // Reguläre KO-Runden + Platzierungsspiele gemeinsam konfliktfrei planen
+  scheduleKOPhase(previewKO, previewPlacements, sched, durationForRound, koStart);
 
   return { koRounds: previewKO, placementGames: previewPlacements };
 }
@@ -2260,7 +2328,7 @@ function renderTree(){
           const m = byTime[t].find(x=>(x.field||1)===f);
           if(m){
             const played = m.h!==''&&m.a!=='';
-            html += `<td style="text-align:left;font-size:12px;">${esc(m.home)} – ${esc(m.away)}${played?` <strong>(${scoreText(m)})</strong>`:''}<br><span style="color:var(--muted);font-size:10px;">${esc(m.phase)}</span></td>`;
+            html += `<td style="text-align:left;font-size:12px;">${esc(teamLabel(m,'home'))} – ${esc(teamLabel(m,'away'))}${played?` <strong>(${scoreText(m)})</strong>`:''}<br><span style="color:var(--muted);font-size:10px;">${esc(m.phase)}</span></td>`;
           } else html += '<td></td>';
         }
         html += '</tr>';
@@ -2317,15 +2385,15 @@ function renderTree(){
         const homeWin = m.winner && m.winner===m.home;
         const awayWin = m.winner && m.winner===m.away;
         const penTxt = (isDrawScore(m) && hasPens(m)) ? ` <span style="font-size:10px;color:var(--muted);">(${m.hp}:${m.ap} n.E.)</span>` : '';
-        const homeIsPlaceholder = m.home==='?';
-        const awayIsPlaceholder = m.away==='?';
+        const homeIsPlaceholder = isPlaceholderSide(m,'home');
+        const awayIsPlaceholder = isPlaceholderSide(m,'away');
         html += `<div class="tree-ko-match${played?' has-winner':''}">
           <div class="tkm-row">
-            <span class="tkm-team${homeWin?' win':''}${homeIsPlaceholder?' placeholder':''}">${esc(m.home)}${m.homeOrigin?`<span class="tkm-origin">${esc(m.homeOrigin)}</span>`:''}</span>
+            <span class="tkm-team${homeWin?' win':''}${homeIsPlaceholder?' placeholder':''}">${esc(teamLabel(m,'home'))}${m.homeOrigin?`<span class="tkm-origin">${esc(m.homeOrigin)}</span>`:''}</span>
             ${played?`<span class="tkm-score">${m.h}</span>`:''}
           </div>
           <div class="tkm-row">
-            <span class="tkm-team${awayWin?' win':''}${awayIsPlaceholder?' placeholder':''}">${esc(m.away)}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span>
+            <span class="tkm-team${awayWin?' win':''}${awayIsPlaceholder?' placeholder':''}">${esc(teamLabel(m,'away'))}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span>
             ${played?`<span class="tkm-score">${m.a}${penTxt}</span>`:''}
           </div>
           ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}${m.field?' · Feld '+m.field:''}</div>`:''}
@@ -2353,8 +2421,8 @@ function renderTree(){
             return;
           }
           html += `<div class="tree-ko-match" style="opacity:0.85;">
-            <div class="tkm-row"><span class="tkm-team${m.home==='?'?' placeholder':''}">${esc(m.home)}${m.homeOrigin?`<span class="tkm-origin">${esc(m.homeOrigin)}</span>`:''}</span></div>
-            <div class="tkm-row"><span class="tkm-team${m.away==='?'?' placeholder':''}">${esc(m.away)}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span></div>
+            <div class="tkm-row"><span class="tkm-team${isPlaceholderSide(m,'home')?' placeholder':''}">${esc(teamLabel(m,'home'))}${m.homeOrigin?`<span class="tkm-origin">${esc(m.homeOrigin)}</span>`:''}</span></div>
+            <div class="tkm-row"><span class="tkm-team${isPlaceholderSide(m,'away')?' placeholder':''}">${esc(teamLabel(m,'away'))}${m.awayOrigin?`<span class="tkm-origin">${esc(m.awayOrigin)}</span>`:''}</span></div>
             ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}${m.field?' · Feld '+m.field:''}</div>`:''}
           </div>`;
         });
@@ -2366,8 +2434,8 @@ function renderTree(){
         html += `<div class="tree-ko-col"><div class="tree-ko-col-title">🥉 ${esc(pg.label)}</div>`;
         pg.matches.forEach(m=>{
           html += `<div class="tree-ko-match" style="opacity:0.7;">
-            <div class="tkm-row"><span class="tkm-team placeholder">${esc(m.home)}</span></div>
-            <div class="tkm-row"><span class="tkm-team placeholder">${esc(m.away)}</span></div>
+            <div class="tkm-row"><span class="tkm-team placeholder">${esc(teamLabel(m,'home'))}</span></div>
+            <div class="tkm-row"><span class="tkm-team placeholder">${esc(teamLabel(m,'away'))}</span></div>
             ${m.time?`<div class="tkm-meta">🕐 ${esc(m.time)}${m.field?' · Feld '+m.field:''}</div>`:''}
           </div>`;
         });
