@@ -415,7 +415,7 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 <div id="qr-modal">
   <div class="qr-box">
     <div class="qr-team" id="qr-team-name"></div>
-    <div class="qr-hint">QR-Code scannen → direkt zum Team-Login</div>
+    <div class="qr-hint" id="qr-hint">QR-Code scannen → direkt zum Team-Login</div>
     <div id="qr-canvas-wrap"></div>
     <div class="qr-pin-box" id="qr-pin-box"><div class="qr-pin-lbl">Team-PIN</div><div class="qr-pin-val" id="qr-pin-val"></div></div>
     <button class="btn-cls" onclick="closeQR()">Schließen</button>
@@ -1470,9 +1470,12 @@ function connectToTournament(id, isNew=false, initialState=null){
     document.getElementById('tournament-gate').style.display='none';
     updateTournamentNameDisplay();
 
-    // Zuschauer-Modus: Admin-Tab und Team-Login ausblenden, Zuschauer-Banner zeigen
+    // Zuschauer-Modus: Nur Übersicht, Gruppen und KO-Runde — alles andere ausblenden
     if(spectatorMode){
-      document.querySelectorAll('#main-nav button[data-view="admin"]').forEach(b => b.style.display='none');
+      document.querySelectorAll('#main-nav button').forEach(b => {
+        const v = b.dataset.view;
+        if(v !== 'overview' && v !== 'groups' && v !== 'knockout') b.style.display = 'none';
+      });
       document.getElementById('team-banner').style.display='none';
       document.getElementById('spectator-banner').style.display='block';
     }
@@ -1967,6 +1970,7 @@ function showMasterQR(){
   wrap.innerHTML = '';
   new QRCode(wrap, { text:url, width:200, height:200, correctLevel:QRCode.CorrectLevel.M });
   document.getElementById('qr-team-name').textContent = 'Schümmelcup – Team-Login';
+  document.getElementById('qr-hint').textContent = 'QR-Code scannen → direkt zum Team-Login';
   document.getElementById('qr-pin-val').textContent = '';
   document.getElementById('qr-pin-box').style.display = 'none';
   document.getElementById('qr-modal').classList.add('open');
@@ -1976,9 +1980,9 @@ function showSpectatorQR(){
   const wrap = document.getElementById('qr-canvas-wrap');
   wrap.innerHTML = '';
   new QRCode(wrap, { text:url, width:200, height:200, correctLevel:QRCode.CorrectLevel.M });
-  document.getElementById('qr-team-name').textContent = '👀 Schümmelcup – Zuschauer (nur Lesen)';
-  document.getElementById('qr-pin-val').textContent = 'Kein Login nötig — einfach scannen und zuschauen';
-  document.getElementById('qr-pin-box').style.display = 'flex';
+  document.getElementById('qr-team-name').textContent = '👀 Zuschauer – Live-Ergebnisse';
+  document.getElementById('qr-hint').textContent = 'QR-Code scannen → Live-Spielstände verfolgen';
+  document.getElementById('qr-pin-box').style.display = 'none';
   document.getElementById('qr-modal').classList.add('open');
 }
 function closeQR(){ document.getElementById('qr-modal').classList.remove('open'); }
