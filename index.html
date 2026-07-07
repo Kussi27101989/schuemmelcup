@@ -39,6 +39,14 @@ nav button.active{background:rgba(255,255,255,.95);color:var(--dark);border-bott
 main{max-width:820px;margin:0 auto;padding:16px 12px 60px;}
 .view{display:none;}.view.active{display:block;}
 .card{background:#fff;border-radius:10px;border:1px solid var(--border);padding:16px;margin-bottom:12px;box-shadow:0 1px 4px rgba(0,60,180,.06);}
+/* Verhindert, dass breite Tabellen (z.B. Ewige Team-Tabelle mit 8 Spalten) das
+   Layout auf schmalen Displays sprengen — die Tabelle wird stattdessen innerhalb
+   der Karte horizontal scrollbar. */
+.card{overflow-x:auto;}
+@media (max-width:420px){
+  .pin-tbl{font-size:11px;}
+  .pin-tbl th, .pin-tbl td{padding:4px 6px;}
+}
 .sec-title{font-family:'Barlow Condensed',sans-serif;font-weight:800;font-size:20px;color:var(--dark);text-transform:uppercase;letter-spacing:1px;border-left:4px solid var(--blue);padding-left:10px;margin-bottom:14px;}
 .stats-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px;}
 .stat-box{background:var(--dark);color:#fff;border-radius:8px;padding:12px 8px;text-align:center;}
@@ -259,7 +267,9 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 .gate-join-row{display:flex;gap:8px;}
 .gate-join-row input{flex:1;padding:10px 12px;border-radius:8px;border:2px solid var(--border);font-size:14px;}
 .gate-join-row input:focus{border-color:var(--blue);outline:none;}
-#gate-new-name{width:100%;padding:10px 12px;border-radius:8px;border:2px solid var(--border);font-size:14px;}
+.gate-section > input{width:100%;padding:10px 12px;border-radius:8px;border:2px solid var(--border);font-size:14px;font-family:inherit;background:#fff;color:var(--text);}
+.gate-section > input:focus{border-color:var(--blue);outline:none;}
+/* Alte spezifische Regel entfernt — .gate-section > input greift jetzt für alle Gate-Inputs */
 #gate-new-name:focus{border-color:var(--blue);outline:none;}
 .gate-divider{display:flex;align-items:center;text-align:center;color:var(--muted);font-size:12px;margin:20px 0;}
 .gate-divider::before,.gate-divider::after{content:'';flex:1;border-bottom:1px solid var(--border);}
@@ -355,10 +365,11 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 
 <!-- BESTENLISTE OVERLAY (außerhalb app-shell — auch ohne Turnier erreichbar) -->
 <div id="hof-overlay" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:800;overflow-y:auto;padding:20px 16px;">
+  <!-- Immer erreichbarer Schließen-Button — bleibt beim Scrollen sichtbar -->
+  <button onclick="document.getElementById('hof-overlay').style.display='none'" style="position:fixed;top:12px;right:12px;background:rgba(255,255,255,.95);color:var(--dark);border:none;width:36px;height:36px;border-radius:50%;font-size:20px;font-weight:700;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.35);z-index:2;" title="Schließen">✕</button>
   <div style="max-width:700px;margin:0 auto;background:var(--bg);border-radius:12px;overflow:hidden;">
-    <div style="background:linear-gradient(135deg,#00317A,#0050A0);padding:16px 20px;display:flex;align-items:center;justify-content:space-between;">
+    <div style="background:linear-gradient(135deg,#00317A,#0050A0);padding:16px 20px;">
       <div style="font-size:18px;font-weight:800;color:#fff;letter-spacing:.5px;">🏆 Ewige Bestenliste</div>
-      <button onclick="document.getElementById('hof-overlay').style.display='none'" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;padding:6px 14px;border-radius:6px;font-weight:600;cursor:pointer;">✕ Schließen</button>
     </div>
     <div id="hof-overlay-content" style="padding:16px;">
       <p style="color:var(--muted);">Lade…</p>
@@ -520,6 +531,11 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
         <label>Pause zwischen zwei Spielen (Feldwechsel etc.):</label>
         <input type="number" id="sched-gap-len" value="5" min="0" max="30" oninput="updateSchedDurationHint()" style="width:70px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);"> Min.
       </div>
+      <div class="form-row" style="margin-top:6px;">
+        <label>Pause zwischen Gruppenphase und KO-Runde:</label>
+        <input type="number" id="sched-ko-pause" value="0" min="0" max="120" style="width:70px;padding:6px 10px;border-radius:5px;border:1px solid var(--border);"> Min.
+        <span style="font-size:11px;color:var(--muted);margin-left:4px;">(z.B. 15 Min. Ansprache, 30 Min. Mittagspause)</span>
+      </div>
       <div style="font-size:11px;color:var(--muted);margin-bottom:16px;" id="sched-duration-hint"></div>
 
       <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">Parallele Spiele (gleichzeitig auf verschiedenen Feldern)</div>
@@ -636,6 +652,16 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       </p>
       <div id="adm-archive-status" style="font-size:12px;margin-bottom:10px;"></div>
       <button id="btn-finish-tournament" onclick="finishTournament()" style="background:var(--green);color:#fff;border:none;padding:10px 18px;border-radius:6px;font-weight:700;font-size:14px;cursor:pointer;">🏁 Turnier abschließen</button>
+    </div>
+
+    <div class="card" style="border-left:4px solid var(--orange);" id="adm-teams">
+      <div style="font-weight:700;color:var(--orange);margin-bottom:6px;">✏️ Teilnehmer verwalten (während des Turniers)</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">
+        Hier kannst du Teams umbenennen, neue Teams hinzufügen oder Teams entfernen — auch wenn das Turnier bereits läuft.
+        <strong>Achtung:</strong> Beim Hinzufügen oder Entfernen werden die Gruppenspiele für die betroffene Gruppe NEU berechnet.
+        Bereits eingetragene Ergebnisse, an denen das geänderte Team nicht beteiligt war, bleiben erhalten.
+      </p>
+      <div id="adm-teams-content"></div>
     </div>
   </div>
 
@@ -922,6 +948,129 @@ async function showHoFStandalone(){
 //  • Ein sichtbarer Online/Offline-Indikator gibt Teams jederzeit Rückmeldung.
 // ═══════════════════════════════════════════════════════════════
 
+// ═══════════════════════════════════════════════════════════════
+// ADMIN: TEILNEHMER VERWALTEN (IM LAUFENDEN TURNIER)
+// ═══════════════════════════════════════════════════════════════
+
+function renderAdmTeams(){
+  const box = document.getElementById('adm-teams-content');
+  if(!box) return;
+  if(S.phase !== 'group' && S.phase !== 'editing'){
+    box.innerHTML = '<p style="color:var(--muted);font-size:12px;font-style:italic;">Teilnehmer können nur während der Gruppenphase angepasst werden.</p>';
+    return;
+  }
+  let h = '';
+  S.groups.forEach((g, gi) => {
+    h += `<div style="margin-bottom:16px;">
+      <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:6px;">Gruppe ${esc(g.name)}</div>`;
+    g.teams.forEach((team, ti) => {
+      h += `<div style="display:flex;align-items:center;gap:6px;padding:4px 0;">
+        <input type="text" id="adm-tn-${gi}-${ti}" value="${esc(team)}" style="flex:1;padding:6px 10px;border-radius:5px;border:1px solid var(--border);font-size:13px;">
+        <button onclick="admRenameTeam(${gi},${ti})" style="background:var(--blue);color:#fff;border:none;padding:5px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;" title="Umbenennen">✓</button>
+        <button onclick="admRemoveTeam(${gi},${ti})" style="background:var(--red);color:#fff;border:none;padding:5px 10px;border-radius:4px;font-size:11px;font-weight:600;cursor:pointer;" title="Entfernen">✕</button>
+      </div>`;
+    });
+    h += `<div style="display:flex;gap:6px;margin-top:6px;">
+      <input type="text" id="adm-nt-${gi}" placeholder="Neues Team hinzufügen…" style="flex:1;padding:6px 10px;border-radius:5px;border:1px solid var(--border);font-size:13px;" onkeydown="if(event.key==='Enter')admAddTeam(${gi})">
+      <button onclick="admAddTeam(${gi})" style="background:var(--green);color:#fff;border:none;padding:5px 12px;border-radius:4px;font-size:13px;font-weight:700;cursor:pointer;">+</button>
+    </div></div>`;
+  });
+  box.innerHTML = h;
+}
+
+function admRenameTeam(gi, ti){
+  const inp = document.getElementById('adm-tn-'+gi+'-'+ti);
+  const newName = inp?.value?.trim();
+  const oldName = S.groups[gi].teams[ti];
+  if(!newName){ alert('Bitte einen Namen eingeben.'); return; }
+  if(newName === oldName) return;
+  if(allTeams().includes(newName)){ alert('Team "'+newName+'" existiert bereits.'); return; }
+  if(!confirm('Team "'+oldName+'" in "'+newName+'" umbenennen?\n\nDer Name wird überall aktualisiert (Spielplan, Ergebnisse, Kader, PINs).')) return;
+  createSnapshot(true);
+  S.groups[gi].teams[ti] = newName;
+  (S.groupMatches[gi]||[]).forEach(m => {
+    if(m.home === oldName) m.home = newName;
+    if(m.away === oldName) m.away = newName;
+    if(m.winner === oldName) m.winner = newName;
+    if(m.loser === oldName) m.loser = newName;
+    (m.events||[]).forEach(e => { if(e.team === oldName) e.team = newName; });
+  });
+  (S.koRounds||[]).forEach(r => r.matches.forEach(m => {
+    if(m.home === oldName) m.home = newName;
+    if(m.away === oldName) m.away = newName;
+    if(m.winner === oldName) m.winner = newName;
+    if(m.loser === oldName) m.loser = newName;
+  }));
+  (S.placementGames||[]).forEach(pg => pg.matches.forEach(m => {
+    if(m.home === oldName) m.home = newName;
+    if(m.away === oldName) m.away = newName;
+    if(m.winner === oldName) m.winner = newName;
+    if(m.loser === oldName) m.loser = newName;
+  }));
+  if(S.rosters[oldName]){ S.rosters[newName] = S.rosters[oldName]; delete S.rosters[oldName]; }
+  if(S.teamPins[oldName]){ S.teamPins[newName] = S.teamPins[oldName]; delete S.teamPins[oldName]; }
+  if(activeTeam === oldName){ activeTeam = newName; localStorage.setItem(ATK, newName); }
+  save(); renderAll(); renderAdmTeams();
+}
+
+function admRemoveTeam(gi, ti){
+  const team = S.groups[gi].teams[ti];
+  if(S.groups[gi].teams.length <= 2){ alert('Eine Gruppe muss mindestens 2 Teams haben.'); return; }
+  if(!confirm('Team "'+team+'" wirklich aus Gruppe '+S.groups[gi].name+' entfernen?\n\nAlle Spiele dieses Teams werden gelöscht. Ergebnisse der verbleibenden Teams bleiben erhalten.')) return;
+  createSnapshot(true);
+  const existing = {};
+  (S.groupMatches[gi]||[]).forEach(m => {
+    if(m.home !== team && m.away !== team && m.h !== '' && m.a !== ''){
+      existing[m.home + '|' + m.away] = { h:m.h, a:m.a, locked:m.locked, events:m.events||[], hp:m.hp||'', ap:m.ap||'' };
+    }
+  });
+  S.groups[gi].teams.splice(ti, 1);
+  delete S.teamPins[team]; delete S.rosters[team];
+  S.groupMatches[gi] = genMatches(S.groups[gi].teams);
+  S.groupMatches[gi].forEach(m => {
+    const key = m.home + '|' + m.away, rev = m.away + '|' + m.home;
+    if(existing[key]) Object.assign(m, existing[key]);
+    else if(existing[rev]){ const e=existing[rev]; Object.assign(m, {h:e.a, a:e.h, locked:e.locked, events:e.events, hp:e.ap, ap:e.hp}); }
+  });
+  if(S.schedule){
+    const allGM = interleaveGroupMatches(S.groupMatches);
+    scheduleMatchList(allGM, S.schedule.firstTime, S.schedule.matchDuration, S.schedule.fieldsGroup);
+  }
+  save(); renderAll(); renderAdmTeams();
+}
+
+function admAddTeam(gi){
+  const inp = document.getElementById('adm-nt-'+gi);
+  const name = inp?.value?.trim();
+  if(!name) return;
+  if(allTeams().includes(name)){ alert('Team "'+name+'" existiert bereits.'); return; }
+  if(!confirm('Team "'+name+'" zu Gruppe '+S.groups[gi].name+' hinzufügen?\n\nDie Gruppenspiele werden NEU berechnet. Bestehende Ergebnisse der anderen Teams bleiben erhalten.')) return;
+  createSnapshot(true);
+  const existing = {};
+  (S.groupMatches[gi]||[]).forEach(m => {
+    if(m.h !== '' && m.a !== ''){
+      existing[m.home + '|' + m.away] = { h:m.h, a:m.a, locked:m.locked, events:m.events||[], hp:m.hp||'', ap:m.ap||'' };
+    }
+  });
+  S.groups[gi].teams.push(name);
+  const used = new Set(Object.values(S.teamPins));
+  let pin; do { pin = rpin(); } while(used.has(pin));
+  S.teamPins[name] = pin;
+  S.groupMatches[gi] = genMatches(S.groups[gi].teams);
+  S.groupMatches[gi].forEach(m => {
+    const key = m.home + '|' + m.away, rev = m.away + '|' + m.home;
+    if(existing[key]) Object.assign(m, existing[key]);
+    else if(existing[rev]){ const e=existing[rev]; Object.assign(m, {h:e.a, a:e.h, locked:e.locked, events:e.events, hp:e.ap, ap:e.hp}); }
+  });
+  if(S.schedule){
+    const allGM = interleaveGroupMatches(S.groupMatches);
+    scheduleMatchList(allGM, S.schedule.firstTime, S.schedule.matchDuration, S.schedule.fieldsGroup);
+  }
+  inp.value = '';
+  save(); renderAll(); renderAdmTeams();
+  alert('Team "'+name+'" hinzugefügt.\n\nNeue PIN: '+pin+'\n\nBitte dem Team mitteilen.');
+}
+
 let _fbConnected = null;
 let _deferredInstallPrompt = null;
 
@@ -930,10 +1079,16 @@ let _deferredInstallPrompt = null;
 //   2. Firebase-Verbindungsstatus (Server erreichbar / getrennt)
 // Zeigt bei Offline zusätzlich, dass Änderungen automatisch nach Reconnect gesynct
 // werden — damit Teams verstehen, dass ihre Ergebnisse NICHT verloren gehen.
+// Rendert die Anzeige und blendet den Live-Indikator während des kurzen
+// Verbindungs-Banners aus, damit sich beide oben-rechts nicht überlappen.
 function updateConnectionIndicator(){
   if(typeof document === 'undefined') return;
   const el = document.getElementById('conn-indicator');
   if(!el) return;
+  const connBanner = document.getElementById('conn-status');
+  const bannerVisible = !!(connBanner && connBanner.style && connBanner.style.display && connBanner.style.display !== 'none');
+  if(bannerVisible){ el.style.display = 'none'; return; }
+  el.style.display = 'inline-flex';
   const browserOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
   if(!browserOnline){
     el.className = 'conn-off';
@@ -1278,10 +1433,12 @@ function connectToTournament(id, isNew=false, initialState=null){
   fbRef = fbdb.ref('tournaments/'+id);
   document.getElementById('conn-status').style.display='flex';
   document.getElementById('conn-status').innerHTML = '<span class="spinner"></span> Verbinde mit Turnier...';
+  updateConnectionIndicator(); // Indikator während Banner ausblenden
 
   // Listener IMMER zuerst registrieren — verhindert verpasste Snapshots durch Race Conditions.
   fbUnsub = fbRef.on('value', snap => {
     document.getElementById('conn-status').style.display='none';
+    updateConnectionIndicator(); // Indikator nach Banner wieder anzeigen
     const data = snap.val();
     if(data===null){
       if(isNew) return; // eigenes Schreiben läuft evtl. noch, kein echter "nicht gefunden"-Fall
@@ -2180,6 +2337,13 @@ function doSave(id, pool, afterFn, isKO=false, context=null){
   const em=document.getElementById('em-'+id);
   const fail=(msg)=>{ em.textContent=msg; em.style.display='block'; };
   em.style.display='none';
+  // Turnier bereits abgeschlossen? Dann keine Änderungen mehr zulassen — der Archiv-
+  // Eintrag ist sonst nicht mehr konsistent mit dem Live-Stand. Admin kann bei
+  // versehentlichem Abschluss über den Snapshot einen früheren Zustand wiederherstellen.
+  if(S.phase === 'done'){
+    fail('Das Turnier ist bereits abgeschlossen. Änderungen sind nicht mehr möglich.');
+    return;
+  }
   if(h===''||a===''){ fail('Bitte beide Tore eingeben.'); return; }
   // Tore müssen ganze Zahlen ≥ 0 sein (verhindert "abc"/"-1"/"2.5" → NaN in der Tabelle)
   if(!/^\d+$/.test(h)||!/^\d+$/.test(a)){ fail('Tore müssen ganze Zahlen ≥ 0 sein.'); return; }
@@ -2444,7 +2608,7 @@ function startFromEditor(){
   const pureMatch = halves===2 ? (halfLen*2 + breakLen) : halfLen;
   const matchDuration = pureMatch + gapLen; // Zeitslot-Länge inkl. Pause bis zum nächsten Spiel auf demselben Feld
 
-  S.schedule = { firstTime, halves, halfLen, breakLen, gapLen, pureMatch, matchDuration, fieldsGroup, fieldsKO };
+  S.schedule = { firstTime, halves, halfLen, breakLen, gapLen, pureMatch, matchDuration, fieldsGroup, fieldsKO, koPause: +(document.getElementById('sched-ko-pause')?.value || 0) };
 
   // Platzierungsspiele-Auswahl übernehmen
   const selectedPlacements = [...document.querySelectorAll('.placement-cb:checked')].map(cb=>cb.value);
@@ -2777,7 +2941,12 @@ function buildKO(){
       return pure + (override.gapLen ?? sched.gapLen);
     };
     const allGM = Object.values(S.groupMatches).flat();
-    const koStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+    const groupEnd = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+    // Konfigurierbare Pause zwischen Gruppenphase und KO-Runde (z.B. Mittagspause, Ansprache)
+    const koPauseMin = sched.koPause || 0;
+    const toMin = (t)=>{ const [h,m]=String(t).split(':').map(Number); return h*60+m; };
+    const toHHMM = (mins)=>{ const hh=Math.floor(mins/60)%24, mm=mins%60; return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
+    const koStart = koPauseMin > 0 ? toHHMM(toMin(groupEnd) + koPauseMin) : groupEnd;
     scheduleKOPhase(S.koRounds, S.placementGames, sched, durationForRound, koStart);
   }
 
@@ -3150,7 +3319,11 @@ function buildKOPreviewWithTiming(){
   };
 
   const allGM = Object.values(S.groupMatches).flat();
-  const koStart = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+  const groupEnd = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+  const koPauseMin = sched.koPause || 0;
+  const toMinL = (t)=>{ const [h,m]=String(t).split(':').map(Number); return h*60+m; };
+  const toHHMML = (mins)=>{ const hh=Math.floor(mins/60)%24, mm=mins%60; return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
+  const koStart = koPauseMin > 0 ? toHHMML(toMinL(groupEnd) + koPauseMin) : groupEnd;
 
   // Platzierungsspiele-Vorschau (mit Platzhaltern, da Verlierer noch nicht feststehen).
   // sourceRound wird mitgegeben, damit der Planer sie korrekt ins Zeitfenster der
@@ -3212,7 +3385,18 @@ function renderTree(){
       const maxFields = Math.max(...allMatches.map(m=>m.field||1));
       for(let f=1; f<=maxFields; f++) html += `<th>Feld ${f}</th>`;
       html += '</tr></thead><tbody>';
+      let _koPauseShown = false;
+      const sched = S.schedule;
       times.forEach(t=>{
+        // Visuelle Pausenmarkierung zwischen Gruppenphase und KO-Runde, wenn eine
+        // Pause konfiguriert ist. Wird nur einmal eingeblendet, an der Nahtstelle.
+        const matchesAtTime = byTime[t];
+        const hasKO = matchesAtTime.some(m => m.phase && m.phase !== 'Gruppe');
+        const hasGroup = matchesAtTime.some(m => m.phase === 'Gruppe');
+        if(hasKO && !hasGroup && (sched?.koPause > 0) && !_koPauseShown){
+          _koPauseShown = true;
+          html += `<tr><td colspan="${maxFields+1}" style="text-align:center;padding:10px 0;font-weight:700;color:var(--orange);font-size:13px;letter-spacing:.5px;">⏸ Pause (${sched.koPause} Min.)</td></tr>`;
+        }
         html += `<tr><td style="font-weight:700;">${t}</td>`;
         for(let f=1; f<=maxFields; f++){
           const m = byTime[t].find(x=>(x.field||1)===f);
@@ -3416,6 +3600,7 @@ function renderAdm(){
     + renderRosterEditor();
 
   renderSnapshotList();
+  renderAdmTeams();
 
   // Archiv-Status: erklärt, ob und warum "abschließen" möglich ist
   const archiveStatus = document.getElementById('adm-archive-status');
