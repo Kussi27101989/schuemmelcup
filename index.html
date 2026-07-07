@@ -1229,6 +1229,7 @@ self.addEventListener('fetch', event => {
 
 
 const LK = 'schuemmelcup_last_tournament'; // localStorage: zuletzt geöffnetes Turnier (nur ID)
+const SPECK = 'schuemmelcup_spectator'; // localStorage: Zuschauer-Modus aktiv (überlebt Reload)
 let TID = localStorage.getItem(LK) || null; // aktive Turnier-ID
 let fbRef = null;       // aktiver Firebase-Listener-Pfad
 let fbUnsub = null;     // Unsubscribe-Funktion
@@ -1513,14 +1514,18 @@ function connectToTournament(id, isNew=false, initialState=null){
     document.getElementById('tournament-gate').style.display='none';
     updateTournamentNameDisplay();
 
-    // Zuschauer-Modus: Nur Übersicht, Gruppen und KO-Runde — alles andere ausblenden
+    // Zuschauer-Modus: NUR Gruppen und KO-Runde — alles andere (auch Übersicht) ausblenden
     if(spectatorMode){
       document.querySelectorAll('#main-nav button').forEach(b => {
         const v = b.dataset.view;
-        if(v !== 'overview' && v !== 'groups' && v !== 'knockout') b.style.display = 'none';
+        if(v !== 'groups' && v !== 'knockout') b.style.display = 'none';
       });
       document.getElementById('team-banner').style.display='none';
       document.getElementById('spectator-banner').style.display='block';
+      // Standard-Ansicht für Zuschauer ist "Gruppen" (Übersicht ist ausgeblendet)
+      if(curView === 'overview' || curView === 'admin' || curView === 'schedule' || curView === 'stats' || curView === 'hof'){
+        curView = 'groups';
+      }
     }
 
     // Falls bereits ein Team eingeloggt war (z.B. nach Reload): Banner wiederherstellen,
@@ -1568,9 +1573,14 @@ function disconnectTournament(){
   fbUnsub = null;
   TID = null;
   localStorage.removeItem(LK);
+  localStorage.removeItem(SPECK); // Zuschauer-Modus zurücksetzen
+  spectatorMode = false;
   activeTeam = null;
   localStorage.removeItem(ATK);
   document.getElementById('team-banner').style.display='none';
+  document.getElementById('spectator-banner').style.display='none';
+  // Alle Nav-Buttons wieder einblenden (falls vorher im Zuschauer-Modus versteckt)
+  document.querySelectorAll('#main-nav button').forEach(b => b.style.display='');
   showTournamentGate();
 }
 
@@ -1844,15 +1854,13 @@ function initApp(){
 
   if(joinId){
     fbdb.ref('tournaments/'+joinId+'/meta').once('value').then(snap=>{
-      // URL-Parameter sofort entfernen, damit ein Reload NICHT wieder den Login-Screen auslöst
-      // ABER: Zuschauer-Modus merken wir uns in einer globalen Variable, nicht in der URL —
-      // sonst verliert man den Modus beim Reload.
-      if(isSpectator) spectatorMode = true;
+      // Zuschauer-Modus in localStorage merken, damit er einen Reload überlebt
+      // (die URL wird gleich bereinigt, sonst wäre der Modus nach F5 weg).
+      if(isSpectator){ spectatorMode = true; localStorage.setItem(SPECK, '1'); }
       window.history.replaceState({}, '', window.location.pathname);
       if(snap.val()!==null){
         addRecentTournament(joinId, snap.val().name);
         connectToTournament(joinId);
-        // Team-Login nur anbieten, wenn KEIN Zuschauer-Modus
         if(!spectatorMode){
           setTimeout(()=>{ if(allTeams().length) openTeamLogin(); }, 600);
         }
@@ -1866,6 +1874,8 @@ function initApp(){
   }
 
   if(TID){
+    // Beim Reload ohne URL-Parameter: gespeicherten Zuschauer-Modus wiederherstellen
+    if(localStorage.getItem(SPECK) === '1') spectatorMode = true;
     connectToTournament(TID);
   } else {
     showTournamentGate();
@@ -1881,6 +1891,8 @@ function initApp(){
 let curView = 'overview';
 document.querySelectorAll('#main-nav button').forEach(b=>b.addEventListener('click',()=>showView(b.dataset.view)));
 function showView(v){
+  // Zuschauer-Modus: nur Gruppen und KO-Runde erlaubt, alles andere auf Gruppen umleiten
+  if(spectatorMode && v !== 'groups' && v !== 'knockout') v = 'groups';
   curView=v;
   document.querySelectorAll('.view').forEach(el=>el.classList.remove('active'));
   document.getElementById('view-'+v).classList.add('active');
