@@ -446,6 +446,9 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
   <span>👤 Eingeloggt als: <strong id="tb-name"></strong></span>
   <button class="btn-switch" onclick="openTeamLogin()">Team wechseln</button>
 </div>
+<div id="spectator-banner" style="display:none;background:linear-gradient(135deg,#00317A,#0050A0);color:#fff;padding:8px 16px;text-align:center;font-size:13px;font-weight:600;">
+  👀 Zuschauer-Modus — Live-Ergebnisse werden automatisch aktualisiert
+</div>
 
 <main>
 
@@ -1417,6 +1420,7 @@ let activeTeam = localStorage.getItem(ATK) || null;
 // sondern rein lokal pro Gerät/Browser-Tab. Sonst würde ein Admin-Login auf einem
 // Gerät automatisch alle anderen Geräte ebenfalls als "Admin entsperrt" zeigen.
 let localAdminUnlocked = false;
+let spectatorMode = false; // Zuschauer-Modus: nur Lesen, keine Ergebnis-Eingabe, kein Admin
 
 function newTournamentId(){
   return 'tk_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
@@ -1465,9 +1469,17 @@ function connectToTournament(id, isNew=false, initialState=null){
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
     updateTournamentNameDisplay();
+
+    // Zuschauer-Modus: Admin-Tab und Team-Login ausblenden, Zuschauer-Banner zeigen
+    if(spectatorMode){
+      document.querySelectorAll('#main-nav button[data-view="admin"]').forEach(b => b.style.display='none');
+      document.getElementById('team-banner').style.display='none';
+      document.getElementById('spectator-banner').style.display='block';
+    }
+
     // Falls bereits ein Team eingeloggt war (z.B. nach Reload): Banner wiederherstellen,
     // aber nur falls dieses Team auch wirklich noch im aktuellen Turnier existiert.
-    if(activeTeam && allTeams().includes(activeTeam)){
+    if(!spectatorMode && activeTeam && allTeams().includes(activeTeam)){
       const banner = document.getElementById('team-banner');
       banner.style.display='flex';
       document.getElementById('tb-name').textContent = activeTeam;
@@ -1763,16 +1775,22 @@ function gateCreate(){
 function initApp(){
   const p = new URLSearchParams(window.location.search);
   const joinId = p.get('t');
+  const isSpectator = p.get('spectator') === '1' || p.get('zuschauer') === '1';
 
   if(joinId){
     fbdb.ref('tournaments/'+joinId+'/meta').once('value').then(snap=>{
       // URL-Parameter sofort entfernen, damit ein Reload NICHT wieder den Login-Screen auslöst
+      // ABER: Zuschauer-Modus merken wir uns in einer globalen Variable, nicht in der URL —
+      // sonst verliert man den Modus beim Reload.
+      if(isSpectator) spectatorMode = true;
       window.history.replaceState({}, '', window.location.pathname);
       if(snap.val()!==null){
         addRecentTournament(joinId, snap.val().name);
         connectToTournament(joinId);
-        // Team-Login automatisch anbieten, sobald Turnierdaten geladen sind (nur bei diesem QR-Aufruf, nicht bei jedem Reload)
-        setTimeout(()=>{ if(allTeams().length) openTeamLogin(); }, 600);
+        // Team-Login nur anbieten, wenn KEIN Zuschauer-Modus
+        if(!spectatorMode){
+          setTimeout(()=>{ if(allTeams().length) openTeamLogin(); }, 600);
+        }
       } else if(TID){
         connectToTournament(TID);
       } else {
@@ -1951,6 +1969,16 @@ function showMasterQR(){
   document.getElementById('qr-team-name').textContent = 'Schümmelcup – Team-Login';
   document.getElementById('qr-pin-val').textContent = '';
   document.getElementById('qr-pin-box').style.display = 'none';
+  document.getElementById('qr-modal').classList.add('open');
+}
+function showSpectatorQR(){
+  const url = window.location.href.split('?')[0]+'?t='+encodeURIComponent(TID)+'&spectator=1';
+  const wrap = document.getElementById('qr-canvas-wrap');
+  wrap.innerHTML = '';
+  new QRCode(wrap, { text:url, width:200, height:200, correctLevel:QRCode.CorrectLevel.M });
+  document.getElementById('qr-team-name').textContent = '👀 Schümmelcup – Zuschauer (nur Lesen)';
+  document.getElementById('qr-pin-val').textContent = 'Kein Login nötig — einfach scannen und zuschauen';
+  document.getElementById('qr-pin-box').style.display = 'flex';
   document.getElementById('qr-modal').classList.add('open');
 }
 function closeQR(){ document.getElementById('qr-modal').classList.remove('open'); }
@@ -2259,7 +2287,7 @@ function mcHTML(m, saveFn, showQRBtn=false){
   const hN = teamLabel(m,'home'), aN = teamLabel(m,'away');
   // Solange ein Teilnehmer noch nicht feststeht ("?"), kann das Spiel nicht eingetragen werden.
   const teamsKnown = !isPlaceholderSide(m,'home') && !isPlaceholderSide(m,'away');
-  const canEdit  = teamsKnown && (localAdminUnlocked || (isMyMatch && !locked));
+  const canEdit  = !spectatorMode && teamsKnown && (localAdminUnlocked || (isMyMatch && !locked));
   const homeHl = activeTeam&&m.home===activeTeam?' hl':'';
   const awayHl = activeTeam&&m.away===activeTeam?' hl':'';
   const cardCls = ['mc',played?'played':'',m.locked?'locked':'',isMyMatch&&!played?'mine':''].filter(Boolean).join(' ');
@@ -3179,7 +3207,7 @@ function renderOv(){
   if(champ&&champ!=='?'){document.getElementById('champ-banner').style.display='block';document.getElementById('champ-name').textContent=champ;}
   else document.getElementById('champ-banner').style.display='none';
   document.getElementById('ov-tables').innerHTML=S.groups.map((g,gi)=>`<div class="card">${tblHTML(g.teams,S.groupMatches[gi]||[],g.name)}</div>`).join('');
-  document.getElementById('ov-ko-btn').style.display=(S.phase==='group'&&localAdminUnlocked)?'block':'none';
+  document.getElementById('ov-ko-btn').style.display=(S.phase==='group'&&localAdminUnlocked&&!spectatorMode)?'block':'none';
 }
 
 function renderGrp(){
@@ -3576,13 +3604,23 @@ function renderAdm(){
 
   // Ein zentraler QR-Code für alle Teams
   document.getElementById('adm-master-qr').innerHTML = `
-    <div class="sec-title" style="margin-bottom:10px;">📱 Team-Login QR-Code</div>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:12px;">
-      Ein einziger QR-Code für alle Teams – am Spielfeldrand aufhängen oder zeigen.
-      Jeder scannt denselben Code, wählt danach sein Team und gibt den Team-PIN ein.
-      Beim ersten Login trägt jedes Team einmalig seinen eigenen Kader ein.
-    </p>
-    <button class="btn-qr" onclick="showMasterQR()" style="font-size:14px;padding:10px 20px;">📱 Zentralen QR-Code anzeigen</button>`;
+    <div class="sec-title" style="margin-bottom:10px;">📱 QR-Codes</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;">
+      <div style="background:var(--bg);padding:14px;border-radius:8px;border:1px solid var(--border);">
+        <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:6px;">⚽ Team-Login</div>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+          Für Teams — scannt den Code, wählt das Team, gibt den PIN ein und kann Ergebnisse eintragen.
+        </p>
+        <button class="btn-qr" onclick="showMasterQR()" style="font-size:13px;padding:8px 16px;width:100%;">📱 QR-Code anzeigen</button>
+      </div>
+      <div style="background:var(--bg);padding:14px;border-radius:8px;border:1px solid var(--border);">
+        <div style="font-weight:700;font-size:13px;color:var(--blue);margin-bottom:6px;">👀 Zuschauer (nur Lesen)</div>
+        <p style="font-size:11px;color:var(--muted);margin-bottom:10px;">
+          Für Angehörige und Zuschauer — Live-Spielstände und Tabellen ohne Login, ohne Bearbeitungsmöglichkeit.
+        </p>
+        <button class="btn-qr" onclick="showSpectatorQR()" style="font-size:13px;padding:8px 16px;width:100%;background:var(--blue);border-color:var(--blue);">👀 QR-Code anzeigen</button>
+      </div>
+    </div>`;
 
   const teams=allTeams();
   let h='<div class="sec-title" style="margin-bottom:10px;">Team-PINs</div>';
