@@ -1426,6 +1426,48 @@ function newTournamentId(){
   return 'tk_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
 }
 
+// Firebase-Realtime-DB speichert Arrays mit lückenlosen numerischen Indizes als
+// echte Arrays — aber sobald einzelne Indizes per Pfad geschrieben werden
+// (Feld-Isolation!) oder Lücken entstehen, liefert Firebase stattdessen ein Objekt
+// {0:..,1:..,2:..} zurück. Array-Methoden wie .map/.find/.forEach würden dann
+// fehlschlagen. Diese Funktion wandelt alle betroffenen Strukturen konsequent in
+// echte Arrays zurück, damit der restliche Code sich nie darum kümmern muss.
+function objToArr(x){
+  if(Array.isArray(x)) return x;
+  if(x && typeof x === 'object'){
+    return Object.keys(x).sort((a,b)=>(+a)-(+b)).map(k=>x[k]);
+  }
+  return [];
+}
+function normalizeStateArrays(){
+  S.groups = objToArr(S.groups);
+  S.groups.forEach(g => { if(g) g.teams = objToArr(g.teams); });
+  if(S.groupMatches && typeof S.groupMatches === 'object'){
+    Object.keys(S.groupMatches).forEach(gi => {
+      S.groupMatches[gi] = objToArr(S.groupMatches[gi]);
+      S.groupMatches[gi].forEach(m => { if(m && m.events) m.events = objToArr(m.events); });
+    });
+  }
+  S.koRounds = objToArr(S.koRounds);
+  S.koRounds.forEach(r => {
+    if(r){
+      r.matches = objToArr(r.matches);
+      r.matches.forEach(m => { if(m && m.events) m.events = objToArr(m.events); });
+    }
+  });
+  S.placementGames = objToArr(S.placementGames);
+  S.placementGames.forEach(pg => {
+    if(pg){
+      pg.matches = objToArr(pg.matches);
+      pg.matches.forEach(m => { if(m && m.events) m.events = objToArr(m.events); });
+    }
+  });
+  if(S.placement && S.placement.selected) S.placement.selected = objToArr(S.placement.selected);
+  if(S.rosters && typeof S.rosters === 'object'){
+    Object.keys(S.rosters).forEach(t => { S.rosters[t] = objToArr(S.rosters[t]); });
+  }
+}
+
 // ── Verbindung zu einem Turnier herstellen (oder neues anlegen) ──
 function connectToTournament(id, isNew=false, initialState=null){
   // Alten Listener sauber abmelden — explizit über die Referenz statt über die
@@ -1466,6 +1508,7 @@ function connectToTournament(id, isNew=false, initialState=null){
     if(S.koTiming===undefined) S.koTiming=null;
     if(!S.rosterMode) S.rosterMode='full';
     if('adminUnlocked' in S) delete S.adminUnlocked; // Altlast aus früherer Version entfernen
+    normalizeStateArrays(); // Firebase liefert Arrays teils als Objekte {0:..,1:..} → zurückwandeln
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
     updateTournamentNameDisplay();
@@ -1566,8 +1609,27 @@ function saveMatchInGroup(gi, matchId){
   const path = `tournaments/${TID}/groupMatches/${gi}/${idx}`;
   fbdb.ref(path).set(match).catch(err=>{
     console.error('Firebase saveMatchInGroup error:', err);
-    // Fallback: kompletten State schreiben, damit keine Daten verloren gehen
-    save();
+    // Häufigste Ursache: restriktive Firebase-Regeln (z.B. eine .validate-Regel auf
+    // Turnier-Ebene, die bei einem isolierten Teil-Schreibvorgang nicht greift).
+    // Fallback: kompletten State schreiben. Schlägt AUCH das fehl, den Nutzer warnen,
+    // damit er die Regeln prüft — sonst wirkt es, als sei das Turnier verschwunden.
+    saveWithErrorNotice();
+  });
+}
+
+// Voll-Save mit sichtbarer Fehlermeldung im Fehlerfall. Verhindert das stille
+// Scheitern, das sich für den Nutzer wie ein "zurückgesetztes" Turnier anfühlt.
+function saveWithErrorNotice(){
+  if(!TID) return;
+  fbdb.ref('tournaments/'+TID).set(S).catch(err=>{
+    console.error('Firebase Voll-Save fehlgeschlagen:', err);
+    const banner = document.getElementById('conn-status');
+    if(banner){
+      banner.style.display='flex';
+      banner.style.background='var(--red)';
+      banner.innerHTML = '⚠ Speichern verweigert (Firebase-Regeln?). Ergebnis lokal erhalten — bitte Datenbank-Regeln prüfen.';
+      setTimeout(()=>{ banner.style.display='none'; banner.style.background=''; }, 8000);
+    }
   });
 }
 
@@ -1613,7 +1675,7 @@ function saveMatchInKO(matchId){
   if(!Object.keys(updates).length) return;
   fbdb.ref('tournaments/'+TID).update(updates).catch(err=>{
     console.error('Firebase saveMatchInKO error:', err);
-    save(); // Fallback
+    saveWithErrorNotice(); // Fallback mit sichtbarer Fehlermeldung
   });
 }
 
