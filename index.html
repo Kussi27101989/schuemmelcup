@@ -461,8 +461,12 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
     <input type="text" id="setup-name" placeholder="z.B. Schümmelcup 2026" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);font-size:14px;margin-bottom:14px;">
     <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:6px;">② Teams (eine Zeile pro Team)</div>
     <textarea id="setup-teams" rows="9" placeholder="Team Blau&#10;Team Rot&#10;Alt-Herren FC..."></textarea>
-    <div style="margin-top:14px;font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">③ Anzahl Gruppen</div>
-    <div class="form-row">
+    <div style="margin-top:14px;font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">③ Modus &amp; Gruppen</div>
+    <div class="opt-grp" id="setup-mode-opts">
+      <button class="opt-btn sel" data-val="groups" onclick="selMode(this)">Gruppen + KO-Runde</button>
+      <button class="opt-btn" data-val="league" onclick="selMode(this)">Liga (1 Gruppe, jeder gegen jeden)</button>
+    </div>
+    <div class="form-row" id="setup-groups-row">
       <select id="setup-groups">
         <option value="2">2 Gruppen</option><option value="3" selected>3 Gruppen</option>
         <option value="4">4 Gruppen</option><option value="5">5 Gruppen</option><option value="6">6 Gruppen</option>
@@ -470,14 +474,27 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <label>Admin-PIN:</label>
       <input type="text" id="setup-adminpin" value="1910" maxlength="8" style="width:80px;letter-spacing:3px;text-align:center;">
     </div>
-    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">④ Tiebreaker</div>
+    <div class="form-row" id="setup-adminpin-league-row" style="display:none;">
+      <label>Admin-PIN:</label>
+      <input type="text" id="setup-adminpin-league" value="1910" maxlength="8" style="width:80px;letter-spacing:3px;text-align:center;">
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:14px;" id="setup-mode-hint">Teams werden gleichmäßig auf die Gruppen verteilt. Nach der Gruppenphase folgt eine KO-Runde.</div>
+
+    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">④ Spielrunden</div>
+    <div class="opt-grp" id="setup-legs-opts">
+      <button class="opt-btn sel" data-val="1" onclick="selOpt(this,'setup-legs-opts')">Nur Hinrunde</button>
+      <button class="opt-btn" data-val="2" onclick="selOpt(this,'setup-legs-opts')">Hin- und Rückrunde</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);margin-bottom:16px;">Bei Hin- und Rückrunde spielt jedes Team zweimal gegeneinander (einmal Heim, einmal Auswärts).</div>
+
+    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">⑤ Tiebreaker</div>
     <div class="opt-grp" id="tb-opts">
       <button class="opt-btn sel" data-val="direkt" onclick="selOpt(this,'tb-opts')">Direkter Vergleich zuerst</button>
       <button class="opt-btn" data-val="indirekt" onclick="selOpt(this,'tb-opts')">Tordifferenz zuerst</button>
     </div>
     <div style="font-size:11px;color:var(--muted);margin-bottom:16px;" id="tb-hint">Punkte → Direkter Vergleich → Tordifferenz → Tore</div>
 
-    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">⑤ Zugang & Kader</div>
+    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">⑥ Zugang & Kader</div>
     <div class="opt-grp" id="setup-pin-opts">
       <button class="opt-btn sel" data-val="yes" onclick="selOpt(this,'setup-pin-opts')">Team-PIN erforderlich</button>
       <button class="opt-btn" data-val="no" onclick="selOpt(this,'setup-pin-opts')">Kein PIN nötig (nur Team wählen)</button>
@@ -564,9 +581,21 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <div style="font-size:11px;color:var(--muted);">Anstoßzeiten werden beim Start automatisch berechnet und können danach pro Spiel im Spielplan noch manuell angepasst werden.</div>
     </div>
 
+    <div class="card" style="border-left:4px solid var(--blue);" id="ko-format-card">
+      <div style="font-weight:700;color:var(--blue);margin-bottom:6px;">🏆 KO-Format</div>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Ab welcher Runde soll die KO-Phase starten? „Automatisch" wählt die passende Runde je nach Anzahl der Teams (empfohlen). Du kannst aber auch eine feste Runde erzwingen.</p>
+      <div class="opt-grp" id="setup-koformat-opts">
+        <button class="opt-btn sel" data-val="auto" onclick="selOpt(this,'setup-koformat-opts')">Automatisch</button>
+        <button class="opt-btn" data-val="af" onclick="selOpt(this,'setup-koformat-opts')">Ab Achtelfinale</button>
+        <button class="opt-btn" data-val="vf" onclick="selOpt(this,'setup-koformat-opts')">Ab Viertelfinale</button>
+        <button class="opt-btn" data-val="hf" onclick="selOpt(this,'setup-koformat-opts')">Nur Halbfinale</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:8px;" id="koformat-hint">Bei „Automatisch" bestimmt die Anzahl der qualifizierten Teams die Runde: 4 Teams → Halbfinale, 8 → Viertelfinale, 16 → Achtelfinale.</div>
+    </div>
+
     <div class="card" style="border-left:4px solid var(--green);">
       <div style="font-weight:700;color:var(--green);margin-bottom:6px;">🥉 Platzierungsspiele</div>
-      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Welche Platzierungsspiele sollen zusätzlich zur regulären KO-Runde gespielt werden? Die Auswahl passt sich automatisch an die zu erwartende Bracket-Größe an.</p>
+      <p style="font-size:12px;color:var(--muted);margin-bottom:10px;">Welche Platzierungsspiele sollen zusätzlich zur regulären KO-Runde gespielt werden? Du kannst frei wählen — die Optionen richten sich nach den Runden im Turnierbaum.</p>
       <div id="placement-opts-box">
         <p style="font-size:12px;color:var(--muted);font-style:italic;">Wird automatisch berechnet, sobald die Gruppenanzahl feststeht...</p>
       </div>
@@ -1412,6 +1441,9 @@ function dflt(){
     placementGames: [], // generierte Platzierungsspiele
     koTiming: null, // { perRound: {Viertelfinale:{...}, Halbfinale:{...}, Finale:{...}, ...} }
     rosterMode: 'full', // 'full' = Nr+Name, 'numberOnly' = nur Trikotnummer
+    legs: 1, // 1 = nur Hinrunde, 2 = Hin- und Rückrunde
+    leagueMode: false, // true = Liga (1 Gruppe, jeder gegen jeden, kein KO)
+    koFormat: 'auto', // 'auto' | 'af' (ab Achtelfinale) | 'vf' (ab Viertelfinale) | 'hf' (ab Halbfinale)
     groups:[], teamPins:{}, rosters:{}, groupMatches:{}, koRounds:[]
   };
 }
@@ -1549,6 +1581,10 @@ function connectToTournament(id, isNew=false, initialState=null){
     document.getElementById('app-shell').style.display='block';
     document.getElementById('tournament-gate').style.display='none';
     updateTournamentNameDisplay();
+
+    // Liga-Modus: KO-Runde-Tab ausblenden (es gibt keine KO-Phase)
+    const koNavBtn = document.querySelector('#main-nav button[data-view="knockout"]');
+    if(koNavBtn) koNavBtn.style.display = S.leagueMode ? 'none' : '';
 
     // Zuschauer-Modus: NUR Gruppen und KO-Runde — alles andere (auch Übersicht) ausblenden
     let spectatorNeedsRedirect = false;
@@ -2580,7 +2616,15 @@ function checkAutoGenerateKO(){
   const allGM = Object.values(S.groupMatches).flat();
   if(!allGM.length) return;
   const allDone = allGM.every(m => m.h!=='' && m.a!=='' && m.locked);
-  if(allDone) buildKO();
+  if(!allDone) return;
+  // Liga-Modus: KEINE KO-Runde. Die Tabelle ist das Endergebnis — Phase bleibt 'group',
+  // aber die Übersicht zeigt die Abschlusstabelle als Endstand.
+  if(S.leagueMode){
+    S.leagueFinished = true;
+    save(); renderAll();
+    return;
+  }
+  buildKO();
 }
 function saveKO(id){
   for(const ri in S.koRounds){
@@ -2611,11 +2655,18 @@ function unlockMatch(id){
 // ═══════════════════════════════════════════════════════════════
 // TOURNAMENT SETUP
 // ═══════════════════════════════════════════════════════════════
-function genMatches(teams){
+function genMatches(teams, legs=1){
   const ms=[];
   roundRobinRounds(teams).forEach(round=>round.forEach(([home,away])=>{
     ms.push({id:uid(),home,away,h:'',a:'',time:'',locked:false,winner:null,loser:null,isFrei:false,events:[],hp:'',ap:''});
   }));
+  // Rückrunde: dieselben Paarungen nochmal mit getauschten Heim-/Auswärtsrollen.
+  if(legs>=2){
+    roundRobinRounds(teams).forEach(round=>round.forEach(([home,away])=>{
+      // Heim und Auswärts vertauscht für das Rückspiel
+      ms.push({id:uid(),home:away,away:home,h:'',a:'',time:'',locked:false,winner:null,loser:null,isFrei:false,events:[],hp:'',ap:''});
+    }));
+  }
   return ms;
 }
 
@@ -2651,16 +2702,37 @@ function startTournament(){
   const teams=raw.split('\n').map(l=>l.trim()).filter(Boolean);
   if(teams.length<2){alert('Mindestens 2 Teams eingeben.');return;}
   const tname=document.getElementById('setup-name')?.value.trim() || '';
-  const ng=parseInt(document.getElementById('setup-groups').value);
-  const apin=document.getElementById('setup-adminpin').value||'1910';
+  const mode = document.querySelector('#setup-mode-opts .opt-btn.sel')?.dataset.val || 'groups';
+  const isLeague = mode === 'league';
+  // Anzahl Gruppen: im Liga-Modus immer 1, sonst aus dem Dropdown
+  const ng = isLeague ? 1 : parseInt(document.getElementById('setup-groups').value);
+  const apin = (isLeague ? document.getElementById('setup-adminpin-league')?.value : document.getElementById('setup-adminpin')?.value) || '1910';
+  const legs = parseInt(document.querySelector('#setup-legs-opts .opt-btn.sel')?.dataset.val || '1');
   const tb=document.querySelector('#tb-opts .opt-btn.sel')?.dataset.val||'direkt';
   const requirePin = (document.querySelector('#setup-pin-opts .opt-btn.sel')?.dataset.val||'yes')==='yes';
   const rosterMode = document.querySelector('#setup-roster-opts .opt-btn.sel')?.dataset.val||'full';
-  const groups=Array.from({length:ng},(_,i)=>({name:String.fromCharCode(65+i),teams:[]}));
+  const groups=Array.from({length:ng},(_,i)=>({name: isLeague ? 'Liga' : String.fromCharCode(65+i),teams:[]}));
   teams.forEach((t,i)=>groups[i%ng].teams.push(t));
-  S=Object.assign(dflt(),{phase:'editing',adminPin:apin,tiebreaker:tb,requirePin,rosterMode,groups,teamPins:makePins(teams),rosters:{},groupMatches:{},koRounds:[]});
+  const groupMatches={};
+  groups.forEach((g,gi)=>{ groupMatches[gi]=genMatches(g.teams, legs); });
+  S=Object.assign(dflt(),{phase:'editing',adminPin:apin,tiebreaker:tb,requirePin,rosterMode,groups,teamPins:makePins(teams),rosters:{},groupMatches,koRounds:[]});
   S.meta = { name: tname, createdAt: Date.now() };
+  S.legs = legs;
+  S.leagueMode = isLeague;
+  // Im Liga-Modus gibt es keine KO-Runde — Platzierung ergibt sich aus der Tabelle.
+  if(isLeague) S.placement = { selected: [] };
   save(); updateTournamentNameDisplay(); showView('groups');
+}
+
+// Umschalten zwischen Gruppen- und Liga-Modus im Setup
+function selMode(btn){
+  selOpt(btn, 'setup-mode-opts');
+  const isLeague = btn.dataset.val === 'league';
+  document.getElementById('setup-groups-row').style.display = isLeague ? 'none' : '';
+  document.getElementById('setup-adminpin-league-row').style.display = isLeague ? 'flex' : 'none';
+  document.getElementById('setup-mode-hint').textContent = isLeague
+    ? 'Alle Teams spielen in einer Tabelle jeder gegen jeden. Kein KO — die Platzierung ergibt sich direkt aus der Tabelle.'
+    : 'Teams werden gleichmäßig auf die Gruppen verteilt. Nach der Gruppenphase folgt eine KO-Runde.';
 }
 
 // ═══════════════════════════════════════════════════════════════
@@ -2779,8 +2851,13 @@ function removeLastGroup(){
 function startFromEditor(){
   const teams=allTeams(); if(teams.length<2){alert('Mindestens 2 Teams.');return;}
   S.groups=S.groups.filter(g=>g.teams.length>0);
-  const gm={}; S.groups.forEach((g,gi)=>gm[gi]=genMatches(g.teams));
+  const legs = S.legs || 1;
+  const gm={}; S.groups.forEach((g,gi)=>gm[gi]=genMatches(g.teams, legs));
   S.groupMatches=gm;
+
+  // KO-Format übernehmen (falls im Setup gewählt)
+  const koFmt = document.querySelector('#setup-koformat-opts .opt-btn.sel')?.dataset.val;
+  if(koFmt) S.koFormat = koFmt;
 
   // Zeitplan-Einstellungen übernehmen
   const firstTime = document.getElementById('sched-first-time').value || '10:00';
@@ -2997,10 +3074,36 @@ function computeQualifiers(placeholdersOnly=true){
   });
 
   const baseCount = winners.length + runnersUp.length; // Top 2 je Gruppe
-  const nextPow2FromBase = Math.pow(2, Math.ceil(Math.log2(Math.max(baseCount,1))));
-  const neededThirds = nextPow2FromBase - baseCount;
+  let nextPow2FromBase = Math.pow(2, Math.ceil(Math.log2(Math.max(baseCount,1))));
 
-  let scheme, qualThirds = [];
+  // KO-Format erzwingen: Wenn der Admin ein festes Format gewählt hat (nicht 'auto'),
+  // wird die Bracket-Größe fest vorgegeben. Es werden dann so viele Teams genommen,
+  // wie das Format braucht (Halbfinale=4, Viertelfinale=8, Achtelfinale=16).
+  const koFormat = S.koFormat || 'auto';
+  const forcedSize = koFormat==='hf' ? 4 : koFormat==='vf' ? 8 : koFormat==='af' ? 16 : null;
+  if(forcedSize) nextPow2FromBase = forcedSize;
+
+  const neededThirds = nextPow2FromBase - baseCount;
+  let scheme = '', qualThirds = [];
+
+  // KO-Format erzwingen (jede feste Größe): Alle verfügbaren Teams nach Rang sortieren
+  // und die besten forcedSize nehmen. Fehlen Teams für die Bracket-Größe, entstehen
+  // Freilose (mkBracket füllt fehlende Slots auf).
+  if(forcedSize){
+    const pool = [
+      ...winners.map(w=>({...w, _tier:0})),
+      ...runnersUp.map(r=>({...r, _tier:1})),
+      ...thirds.map(t=>({...t, _tier:2})),
+    ].sort((a,b)=> a._tier-b._tier || (b.pkt||0)-(a.pkt||0) || (b.td||0)-(a.td||0) || (b.tore||0)-(a.tore||0));
+    const chosen = pool.slice(0, forcedSize);
+    const seeded = seedByStrength(chosen, forcedSize);
+    const bn = bracketName(forcedSize);
+    scheme = chosen.length < forcedSize
+      ? `Feste KO-Runde (${bn}): ${chosen.length} Teams qualifiziert — fehlende Plätze werden zu Freilosen.`
+      : `Feste KO-Runde (${bn}): die ${forcedSize} besten Teams der Gruppenphase qualifizieren sich.`;
+    return { seeded, scheme, baseCount, neededThirds:0, thirdsAvailable: thirds.length, forced:true };
+  }
+
   if(neededThirds === 0){
     // Top 2 je Gruppe ergibt bereits eine glatte Bracket-Größe
     scheme = `Die besten 2 jeder Gruppe qualifizieren sich (${baseCount} Teams → ${bracketName(nextPow2FromBase)}).`;
@@ -3024,7 +3127,41 @@ function computeQualifiers(placeholdersOnly=true){
   return { seeded, scheme, baseCount, neededThirds, thirdsAvailable: thirds.length };
 }
 
-// Baut die Setzliste für mkBracket. Der Bracket-Algorithmus paart Slots sequenziell
+// Klassische Setzung nach Stärke für ein Bracket fester Größe: Der stärkste
+// Qualifikant trifft auf den schwächsten, der zweitstärkste auf den zweitschwächsten
+// usw. (Slot-Reihenfolge 0v1, 2v3, ... wird bedient). Vermeidet nach Möglichkeit,
+// dass zwei Teams aus derselben Gruppe direkt in Runde 1 aufeinandertreffen.
+function seedByStrength(teams, bracketSize){
+  const sorted = teams.slice().sort((a,b)=> (b.pkt||0)-(a.pkt||0) || (b.td||0)-(a.td||0) || (b.tore||0)-(a.tore||0));
+  const slots = new Array(bracketSize).fill(null);
+  // Paarungen: Slot-Paar k (Positionen 2k und 2k+1) bekommt Setzkopf k und Gegner (N-1-k)
+  const half = bracketSize/2;
+  for(let k=0;k<half;k++){
+    const strong = sorted[k] || null;
+    const weak = sorted[bracketSize-1-k] || null;
+    slots[k*2] = strong;
+    slots[k*2+1] = weak;
+  }
+  // Gruppenkonflikt in Runde 1 nach Möglichkeit auflösen: Wenn Setzkopf und Gegner
+  // aus derselben Gruppe kommen, versuche den Gegner mit einem anderen Gegner zu tauschen.
+  for(let k=0;k<half;k++){
+    const s=slots[k*2], g=slots[k*2+1];
+    if(s && g && s.fromGroup && s.fromGroup===g.fromGroup){
+      // Suche einen anderen Gegner-Slot, mit dem ein konfliktfreier Tausch möglich ist
+      for(let j=0;j<half;j++){
+        if(j===k) continue;
+        const s2=slots[j*2], g2=slots[j*2+1];
+        if(!g2) continue;
+        const okA = !(s.fromGroup===g2.fromGroup);
+        const okB = !(s2 && s2.fromGroup===g.fromGroup);
+        if(okA && okB){ slots[k*2+1]=g2; slots[j*2+1]=g; break; }
+      }
+    }
+  }
+  return slots;
+}
+
+
 // (0 vs 1, 2 vs 3, ...), deshalb belegen wir:
 //  • Gerade Slots (0, 2, 4, ...) = Setzköpfe (Gruppensieger nach Stärke)
 //  • Ungerade Slots (1, 3, 5, ...) = Gegner; hier landen zuerst die besten Dritten
