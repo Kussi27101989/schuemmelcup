@@ -1010,8 +1010,8 @@ function admRenameTeam(gi, ti){
     if(m.winner === oldName) m.winner = newName;
     if(m.loser === oldName) m.loser = newName;
   }));
-  if(S.rosters[oldName]){ S.rosters[newName] = S.rosters[oldName]; delete S.rosters[oldName]; }
-  if(S.teamPins[oldName]){ S.teamPins[newName] = S.teamPins[oldName]; delete S.teamPins[oldName]; }
+  if(getRoster(oldName).length || (S.rosters && S.rosters[teamKey(oldName)])){ setRoster(newName, getRoster(oldName)); delRoster(oldName); }
+  if(getPin(oldName)!==undefined){ setPin(newName, getPin(oldName)); delPin(oldName); }
   if(activeTeam === oldName){ activeTeam = newName; localStorage.setItem(ATK, newName); }
   save(); renderAll(); renderAdmTeams();
 }
@@ -1028,7 +1028,7 @@ function admRemoveTeam(gi, ti){
     }
   });
   S.groups[gi].teams.splice(ti, 1);
-  delete S.teamPins[team]; delete S.rosters[team];
+  delPin(team); delRoster(team);
   S.groupMatches[gi] = genMatches(S.groups[gi].teams);
   S.groupMatches[gi].forEach(m => {
     const key = m.home + '|' + m.away, rev = m.away + '|' + m.home;
@@ -1056,9 +1056,9 @@ function admAddTeam(gi){
     }
   });
   S.groups[gi].teams.push(name);
-  const used = new Set(Object.values(S.teamPins));
+  const used = new Set(Object.values(S.teamPins||{}));
   let pin; do { pin = rpin(); } while(used.has(pin));
-  S.teamPins[name] = pin;
+  setPin(name, pin);
   S.groupMatches[gi] = genMatches(S.groups[gi].teams);
   S.groupMatches[gi].forEach(m => {
     const key = m.home + '|' + m.away, rev = m.away + '|' + m.home;
@@ -1924,7 +1924,37 @@ function updateSchedDurationHint(){
   if(el) el.textContent = `Reine Spielzeit: ${pureMatch} Min.` + (halves===2?` (${halfLen}+${breakLen}+${halfLen})`:'') + ` · Mit Pause zum nächsten Spiel: ${slotTotal} Min. pro Zeitslot`;
 }
 function allTeams(){ return S.groups.flatMap(g=>g.teams); }
-function roster(team){ return S.rosters[team] || []; }
+
+// ─── Firebase-sichere Schlüssel ───────────────────────────────────
+// Firebase-Realtime-DB verbietet in SCHLÜSSELN die Zeichen . # $ / [ ]
+// Teamnamen wie "1.FC Monheim" (Punkt!) können deshalb NICHT direkt als Schlüssel
+// in teamPins/rosters verwendet werden — der Schreibvorgang schlägt sonst komplett
+// fehl (das war die Ursache des "Turnier wird zurückgesetzt"-Bugs).
+// Diese Funktion kodiert verbotene Zeichen in harmlose Ersatzsequenzen. Da die
+// Kodierung nur intern als Map-Schlüssel dient, muss sie nicht menschenlesbar sein —
+// nur eindeutig und umkehrbar-frei von Kollisionen.
+function teamKey(name){
+  return String(name)
+    .replace(/%/g,'%25')  // zuerst das Escape-Zeichen selbst
+    .replace(/\./g,'%2E')
+    .replace(/#/g,'%23')
+    .replace(/\$/g,'%24')
+    .replace(/\//g,'%2F')
+    .replace(/\[/g,'%5B')
+    .replace(/\]/g,'%5D');
+}
+// Zugriffshelfer — ALLE Lese-/Schreibzugriffe auf teamPins/rosters laufen hierüber,
+// damit Teamnamen mit Sonderzeichen zuverlässig funktionieren.
+function getPin(team){ return (S.teamPins||{})[teamKey(team)]; }
+function setPin(team, pin){ if(!S.teamPins) S.teamPins={}; S.teamPins[teamKey(team)] = pin; }
+function delPin(team){ if(S.teamPins) delete S.teamPins[teamKey(team)]; }
+function getRoster(team){ return (S.rosters||{})[teamKey(team)] || []; }
+function setRoster(team, arr){ if(!S.rosters) S.rosters={}; S.rosters[teamKey(team)] = arr; }
+function hasRoster(team){ const r=(S.rosters||{})[teamKey(team)]; return Array.isArray(r) && r.length>0; }
+function delRoster(team){ if(S.rosters) delete S.rosters[teamKey(team)]; }
+function ensureRoster(team){ if(!S.rosters) S.rosters={}; const k=teamKey(team); if(!S.rosters[k]) S.rosters[k]=[]; return S.rosters[k]; }
+
+function roster(team){ return getRoster(team); }
 
 // ═══════════════════════════════════════════════════════════════
 // TEAM LOGIN
@@ -1948,7 +1978,7 @@ function tlSelectTeam(btn){
     // Kein PIN nötig — direkt einloggen (bzw. Kader-Pflichtschritt falls noch leer)
     activeTeam = team;
     localStorage.setItem(ATK, team);
-    if(!S.rosters[team] || S.rosters[team].length===0){
+    if(!hasRoster(team)){
       document.getElementById('tl-pin-section').style.display='none';
       document.getElementById('tl-roster-section').style.display='block';
       renderTLRoster();
@@ -1974,7 +2004,7 @@ function tlConfirm(){
   if(!sel){ alert('Bitte zuerst ein Team auswählen.'); return; }
   const team = sel.dataset.team;
   const pin  = document.getElementById('tl-pin-inp').value.trim();
-  if(pin !== S.teamPins[team]){
+  if(pin !== getPin(team)){
     document.getElementById('tl-err').style.display='block';
     document.getElementById('tl-pin-inp').value='';
     document.getElementById('tl-pin-inp').focus();
@@ -1983,7 +2013,7 @@ function tlConfirm(){
   activeTeam = team;
   localStorage.setItem(ATK, team);
   // Falls noch kein Kader hinterlegt: Pflicht-Schritt zur Spielereingabe
-  if(!S.rosters[team] || S.rosters[team].length===0){
+  if(!hasRoster(team)){
     document.getElementById('tl-pin-section').style.display='none';
     document.getElementById('tl-roster-section').style.display='block';
     renderTLRoster();
@@ -1993,7 +2023,7 @@ function tlConfirm(){
 }
 
 function renderTLRoster(){
-  const pl = S.rosters[activeTeam]||[];
+  const pl = getRoster(activeTeam);
   const list = document.getElementById('tl-roster-list');
   const numberOnly = S.rosterMode==='numberOnly';
   list.innerHTML = pl.length
@@ -2011,14 +2041,13 @@ function tlAddPlayer(){
   const name = numberOnly ? '' : nameInp.value.trim();
   if(numberOnly && !nr){ alert('Bitte eine Trikotnummer eingeben.'); return; }
   if(!numberOnly && !name){ alert('Bitte einen Spielernamen eingeben.'); return; }
-  if(!S.rosters[activeTeam]) S.rosters[activeTeam]=[];
-  S.rosters[activeTeam].push({name,nr});
+  ensureRoster(activeTeam).push({name,nr});
   nrInp.value=''; nameInp.value=''; nrInp.focus();
   save(); renderTLRoster();
 }
-function tlRmPlayer(idx){ S.rosters[activeTeam].splice(idx,1); save(); renderTLRoster(); }
+function tlRmPlayer(idx){ getRoster(activeTeam).splice(idx,1); save(); renderTLRoster(); }
 function tlFinishRoster(){
-  if(!S.rosters[activeTeam] || S.rosters[activeTeam].length===0){
+  if(!hasRoster(activeTeam)){
     if(!confirm('Ihr habt noch keine Spieler eingetragen. Trotzdem ohne Kader fortfahren? (Tore/Karten können dann nicht einzelnen Spielern zugeordnet werden.)')) return;
   }
   tlFinishLogin();
@@ -2604,7 +2633,7 @@ function renderGE(){
   setTimeout(()=>{ updateSchedDurationHint(); renderPlacementAndTimingPreview(); }, 0);
 }
 function mvTeam(fi,ti,to){ S.groups[to].teams.push(S.groups[fi].teams.splice(ti,1)[0]); save();renderGE(); }
-function rmTeam(gi,ti){ const t=S.groups[gi].teams.splice(ti,1)[0]; delete S.teamPins[t]; delete S.rosters[t]; save();renderGE(); }
+function rmTeam(gi,ti){ const t=S.groups[gi].teams.splice(ti,1)[0]; delPin(t); delRoster(t); save();renderGE(); }
 
 // Simuliert NUR die Bracket-STRUKTUR (Rundennamen, Anzahl Spiele je Runde) basierend
 // auf der aktuellen Gruppenanzahl — ohne echte Teamnamen, nur für die Setup-Vorschau
@@ -2687,8 +2716,8 @@ function updateTimingBoxWithPlacements(){
 function addT(gi){
   const inp=document.getElementById('nt-'+gi); const v=inp.value.trim(); if(!v)return;
   if(allTeams().includes(v)){alert('Team existiert bereits.');return;}
-  const used=new Set(Object.values(S.teamPins)); let p; do{p=rpin();}while(used.has(p));
-  S.teamPins[v]=p; S.groups[gi].teams.push(v); inp.value=''; save();renderGE();
+  const used=new Set(Object.values(S.teamPins||{})); let p; do{p=rpin();}while(used.has(p));
+  setPin(v,p); S.groups[gi].teams.push(v); inp.value=''; save();renderGE();
 }
 function addGroup(){ S.groups.push({name:String.fromCharCode(65+S.groups.length),teams:[]}); save();renderGE(); }
 function removeLastGroup(){
@@ -2863,13 +2892,12 @@ function addPlayer(team){
   const name = numberOnly ? '' : nameInp.value.trim();
   if(numberOnly && !nr){ alert('Bitte eine Trikotnummer eingeben.'); return; }
   if(!numberOnly && !name){ alert('Bitte einen Spielernamen eingeben.'); return; }
-  if(!S.rosters[team]) S.rosters[team]=[];
-  S.rosters[team].push({name, nr});
+  ensureRoster(team).push({name, nr});
   nrInp.value=''; nameInp.value='';
   save(); renderAdm();
 }
 function rmPlayer(team, idx){
-  S.rosters[team].splice(idx,1);
+  getRoster(team).splice(idx,1);
   save(); renderAdm();
 }
 
@@ -3705,8 +3733,8 @@ function renderAdm(){
   h+='<p style="font-size:13px;color:var(--muted);margin-bottom:12px;">Falls ein Team den PIN vergisst oder kein Scanner zur Hand hat, kann er auch manuell mitgeteilt werden.</p>';
   h+='<table class="pin-tbl"><thead><tr><th>Team</th><th>Gruppe</th><th>PIN</th><th>Kader</th></tr></thead><tbody>';
   S.groups.forEach(g=>g.teams.forEach(t=>{
-    const n = (S.rosters[t]||[]).length;
-    h+=`<tr><td><strong>${esc(t)}</strong></td><td>Gruppe ${esc(g.name)}</td><td><span class="pin-code">${S.teamPins[t]||'????'}</span></td><td>${n>0?`${n} Spieler ✓`:'<span style="color:var(--orange);">noch leer</span>'}</td></tr>`;
+    const n = getRoster(t).length;
+    h+=`<tr><td><strong>${esc(t)}</strong></td><td>Gruppe ${esc(g.name)}</td><td><span class="pin-code">${getPin(t)||'????'}</span></td><td>${n>0?`${n} Spieler ✓`:'<span style="color:var(--orange);">noch leer</span>'}</td></tr>`;
   }));
   h+='</tbody></table>';
   document.getElementById('adm-pins').innerHTML=h;
