@@ -3461,10 +3461,26 @@ function exportSchedulePDF(){
   });
   html += `</tbody></table>`;
 
-  // KO-Runde
-  if(S.koRounds.length){
-    html += `<h3>KO-Runde</h3><table><thead><tr><th>Runde</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
-    S.koRounds.forEach(r=>{
+  // KO-Runde: Wenn die echte KO-Runde schon generiert wurde, diese nutzen.
+  // Andernfalls die VORSCHAU mit Platzhaltern ("Sieger Gruppe A", "Sieger HF1" usw.),
+  // damit im Ausdruck immer der komplette Turnierbaum sichtbar ist — auch während
+  // die Gruppenphase noch läuft.
+  let koRoundsForPrint = S.koRounds;
+  let placementForPrint = S.placementGames;
+  let isKOPreview = false;
+  if(!S.koRounds.length){
+    const preview = buildKOPreviewWithTiming();
+    if(preview.koRounds.length){
+      koRoundsForPrint = preview.koRounds;
+      placementForPrint = preview.placementGames;
+      isKOPreview = true;
+    }
+  }
+
+  if(koRoundsForPrint && koRoundsForPrint.length){
+    const previewNote = isKOPreview ? ' <span style="font-size:11px;color:#5B6F96;font-weight:normal;">(Vorschau — Teilnehmer stehen nach der Gruppenphase fest)</span>' : '';
+    html += `<h3>KO-Runde${previewNote}</h3><table><thead><tr><th>Runde</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
+    koRoundsForPrint.forEach(r=>{
       r.matches.forEach(m=>{
         if(m.isFrei) return;
         const played = m.h!==''&&m.a!=='';
@@ -3475,9 +3491,9 @@ function exportSchedulePDF(){
   }
 
   // Platzierungsspiele
-  if(S.placementGames && S.placementGames.length){
+  if(placementForPrint && placementForPrint.length){
     html += `<h3>Platzierungsspiele</h3><table><thead><tr><th>Spiel</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
-    S.placementGames.forEach(pg=>{
+    placementForPrint.forEach(pg=>{
       pg.matches.forEach(m=>{
         const played = m.h!==''&&m.a!=='';
         html += `<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(teamLabel(m,'home'))}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(teamLabel(m,'away'))}</td></tr>`;
