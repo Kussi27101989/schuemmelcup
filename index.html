@@ -2617,10 +2617,31 @@ function checkAutoGenerateKO(){
   if(!allGM.length) return;
   const allDone = allGM.every(m => m.h!=='' && m.a!=='' && m.locked);
   if(!allDone) return;
-  // Liga-Modus: KEINE KO-Runde. Die Tabelle ist das Endergebnis — Phase bleibt 'group',
-  // aber die Übersicht zeigt die Abschlusstabelle als Endstand.
+  // Liga-Modus: KEINE KO-Runde. Die Tabelle ist das Endergebnis. Optional werden
+  // Liga-Platzierungsspiele generiert (Finale 1v2, Platz 3 = 3v4, usw.), sofern gewählt.
   if(S.leagueMode){
     S.leagueFinished = true;
+    if(S.placement && S.placement.selected && S.placement.selected.length){
+      generateLeaguePlacementGames();
+      // Platzierungsspiele zeitlich nach dem letzten Ligaspiel einplanen
+      const sched = S.schedule;
+      if(sched && S.placementGames.length){
+        const allGM = Object.values(S.groupMatches).flat();
+        const leagueEnd = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
+        const koPauseMin = sched.koPause || 0;
+        const toMin=(t)=>{const[h,m]=String(t).split(':').map(Number);return h*60+m;};
+        const toHHMM=(mins)=>{const hh=Math.floor(mins/60)%24,mm=mins%60;return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;};
+        let startMin = toMin(leagueEnd) + koPauseMin;
+        const fields = sched.fieldsKO || 1;
+        // Alle Platzierungsspiel-Matches sammeln und auf Felder verteilen
+        const allPlacementMatches = S.placementGames.flatMap(pg=>pg.matches);
+        allPlacementMatches.forEach((mm, idx)=>{
+          const slot = Math.floor(idx/fields);
+          mm.time = toHHMM(startMin + slot*sched.matchDuration);
+          mm.field = (idx % fields) + 1;
+        });
+      }
+    }
     save(); renderAll();
     return;
   }
@@ -2719,8 +2740,7 @@ function startTournament(){
   S.meta = { name: tname, createdAt: Date.now() };
   S.legs = legs;
   S.leagueMode = isLeague;
-  // Im Liga-Modus gibt es keine KO-Runde — Platzierung ergibt sich aus der Tabelle.
-  if(isLeague) S.placement = { selected: [] };
+  // Platzierungsspiele werden im Editor-Schritt gewählt (auch im Liga-Modus).
   save(); updateTournamentNameDisplay(); showView('groups');
 }
 
@@ -2771,9 +2791,33 @@ function simulateKOStructure(){
 }
 
 function renderPlacementAndTimingPreview(){
-  const structure = simulateKOStructure();
   const placementBox = document.getElementById('placement-opts-box');
   const timingBox = document.getElementById('ko-round-timing-box');
+
+  // ── LIGA-MODUS: Platzierungsspiele nach Tabellenplatz (Finale 1v2, Platz 3 = 3v4, ...) ──
+  if(S.leagueMode){
+    // KO-Format-Karte im Liga-Modus ausblenden (es gibt keine KO-Runde)
+    const koFmtCard = document.getElementById('ko-format-card');
+    if(koFmtCard) koFmtCard.style.display = 'none';
+
+    const teamCount = S.groups[0]?.teams.length || 0;
+    const opts = leaguePlacementOptions(teamCount);
+    if(!opts.length){
+      placementBox.innerHTML = '<p style="font-size:12px;color:var(--muted);">Zu wenige Teams für Platzierungsspiele.</p>';
+    } else {
+      const currentlySelected = new Set((S.placement?.selected)||[]);
+      placementBox.innerHTML = `<p style="font-size:12px;color:var(--muted);margin-bottom:8px;">Optionale Entscheidungsspiele: Die Tabellenplätze spielen direkt gegeneinander. Ohne Auswahl entscheidet allein die Tabelle.</p>` + opts.map(o=>`
+        <label style="display:flex;align-items:center;gap:8px;padding:6px 0;font-size:13px;cursor:pointer;">
+          <input type="checkbox" class="placement-cb" value="${o.key}"${currentlySelected.has(o.key)?' checked':''} style="width:16px;height:16px;">
+          ${esc(o.label)} <span style="color:var(--muted);font-size:11px;">(${o.resultLabel})</span>
+        </label>`).join('');
+    }
+    // Im Liga-Modus keine Rundenzeiten-Tabelle (keine KO-Runden)
+    timingBox.innerHTML = '<p style="font-size:12px;color:var(--muted);font-style:italic;">Im Liga-Modus gelten für Platzierungsspiele dieselben Spielzeiten wie für die Ligaspiele.</p>';
+    return;
+  }
+
+  const structure = simulateKOStructure();
   if(!structure.length){
     placementBox.innerHTML = '<p style="font-size:12px;color:var(--muted);font-style:italic;">Mindestens 2 Gruppen nötig.</p>';
     timingBox.innerHTML = '';
@@ -3341,6 +3385,55 @@ function mkBracket(q){
 // Ermittelt, welche Platzierungsspiel-Stufen bei einer gegebenen KO-Rundenanzahl
 // überhaupt möglich sind. Z.B. bei Viertelfinale (4 Spiele) sind "Platz 3" (aus
 // Halbfinale-Verlierern) UND "Platz 5-8" (aus Viertelfinale-Verlierern) möglich.
+// ── LIGA-PLATZIERUNGSSPIELE ──────────────────────────────────────
+// Im Liga-Modus können optionale Entscheidungsspiele gespielt werden, bei denen
+// benachbarte Tabellenplätze direkt gegeneinander antreten: Finale (1. vs 2.),
+// Spiel um Platz 3 (3. vs 4.), Spiel um Platz 5 (5. vs 6.) usw. Anders als die
+// KO-Platzierungsspiele basieren diese NICHT auf Rundenverlierern, sondern direkt
+// auf der Abschlusstabelle.
+function leaguePlacementOptions(teamCount){
+  const opts = [];
+  // Für je zwei benachbarte Plätze ein optionales Spiel: (1,2), (3,4), (5,6), ...
+  for(let top=1; top+1<=teamCount; top+=2){
+    const lower = top+1;
+    const key = `liga_${top}_${lower}`;
+    let label, resultLabel;
+    if(top===1){ label = 'Finale (1. vs 2.)'; resultLabel = 'Platz 1/2'; }
+    else { label = `Spiel um Platz ${top} (${top}. vs ${lower}.)`; resultLabel = `Platz ${top}/${lower}`; }
+    opts.push({ key, top, lower, label, resultLabel, numGames:1 });
+  }
+  return opts;
+}
+
+// Generiert die Liga-Platzierungsspiele mit den ECHTEN Teams aus der Abschlusstabelle.
+// Wird aufgerufen, sobald alle regulären Ligaspiele gespielt sind.
+function generateLeaguePlacementGames(){
+  if(!S.placement || !S.placement.selected || !S.placement.selected.length){ S.placementGames=[]; return; }
+  // Abschlusstabelle der Liga (eine Gruppe)
+  const table = standings(S.groups[0].teams, S.groupMatches[0]||[], S.tiebreaker);
+  const games = [];
+  S.placement.selected.forEach(key=>{
+    const m = key.match(/^liga_(\d+)_(\d+)$/);
+    if(!m) return;
+    const topRank = parseInt(m[1]), lowerRank = parseInt(m[2]);
+    // Tabellenplätze sind 1-basiert, Array 0-basiert
+    const homeTeam = table[topRank-1]?.team;
+    const awayTeam = table[lowerRank-1]?.team;
+    if(!homeTeam || !awayTeam) return; // nicht genug Teams für diesen Platz
+    const label = topRank===1 ? 'Finale (1. vs 2.)' : `Spiel um Platz ${topRank}`;
+    const resultLabel = topRank===1 ? 'Platz 1/2' : `Platz ${topRank}/${lowerRank}`;
+    games.push({
+      key, label, resultLabel, isLeague:true,
+      matches:[{
+        id:uid(), home:homeTeam, away:awayTeam,
+        homeFrom:`${topRank}. der Tabelle`, awayFrom:`${lowerRank}. der Tabelle`,
+        h:'',a:'',time:'',locked:false,hp:'',ap:'',winner:null,loser:null,isFrei:false,events:[]
+      }]
+    });
+  });
+  S.placementGames = games;
+}
+
 function availablePlacementOptions(koRounds){
   const opts = [];
   koRounds.forEach(r=>{
@@ -3516,11 +3609,23 @@ function renderGrp(){
   if(S.phase==='setup'){document.getElementById('ge-section').style.display='none';document.getElementById('grp-content').innerHTML='<div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div>';return;}
   if(S.phase==='editing'){renderGE();document.getElementById('grp-content').innerHTML='';return;}
   document.getElementById('ge-section').style.display='none';
-  document.getElementById('grp-content').innerHTML=S.groups.map((g,gi)=>`
+  let grpHtml = S.groups.map((g,gi)=>`
     <div class="card">${tblHTML(g.teams,S.groupMatches[gi]||[],g.name)}
       <div style="margin-top:16px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Spiele</div>
       ${(S.groupMatches[gi]||[]).map(m=>mcHTML(m,'saveGM',true)).join('')}
     </div>`).join('');
+  // Im Liga-Modus: Platzierungsspiele (Finale, Platz 3, ...) unter der Tabelle anzeigen
+  if(S.leagueMode && (S.placementGames||[]).length){
+    grpHtml += (S.placementGames||[]).map(pg=>`
+      <div class="card" style="border-left:4px solid var(--green);">
+        <div class="ko-title">${pg.key==='liga_1_2'?'🏆 ':'🥉 '}${esc(pg.label)}</div>
+        ${pg.matches.map(m=>mcHTML(m,'saveKO',true)).join('')}
+      </div>`).join('');
+  } else if(S.leagueMode && S.leagueFinished && (S.placement?.selected||[]).length){
+    // Liga beendet, Platzierungsspiele ausgewählt aber noch nicht generiert (Sicherheitsnetz)
+    grpHtml += '<div class="card"><p style="color:var(--muted);font-size:13px;">Platzierungsspiele werden vorbereitet…</p></div>';
+  }
+  document.getElementById('grp-content').innerHTML = grpHtml;
   // initialize player dropdowns for visible add-event boxes
   setTimeout(initEventDropdowns, 0);
 }
