@@ -1424,6 +1424,7 @@ let activeTeam = localStorage.getItem(ATK) || null;
 // Gerät automatisch alle anderen Geräte ebenfalls als "Admin entsperrt" zeigen.
 let localAdminUnlocked = false;
 let spectatorMode = false; // Zuschauer-Modus: nur Lesen, keine Ergebnis-Eingabe, kein Admin
+let _spectatorViewInit = false; // verhindert wiederholtes View-Umleiten bei jedem Firebase-Update
 
 function newTournamentId(){
   return 'tk_' + Math.random().toString(36).slice(2,9) + Date.now().toString(36).slice(-4);
@@ -1550,6 +1551,7 @@ function connectToTournament(id, isNew=false, initialState=null){
     updateTournamentNameDisplay();
 
     // Zuschauer-Modus: NUR Gruppen und KO-Runde — alles andere (auch Übersicht) ausblenden
+    let spectatorNeedsRedirect = false;
     if(spectatorMode){
       document.querySelectorAll('#main-nav button').forEach(b => {
         const v = b.dataset.view;
@@ -1557,10 +1559,14 @@ function connectToTournament(id, isNew=false, initialState=null){
       });
       document.getElementById('team-banner').style.display='none';
       document.getElementById('spectator-banner').style.display='block';
-      // Standard-Ansicht für Zuschauer ist "Gruppen" (Übersicht ist ausgeblendet)
-      if(curView === 'overview' || curView === 'admin' || curView === 'schedule' || curView === 'stats' || curView === 'hof'){
-        curView = 'groups';
+      // Wenn die aktuelle Ansicht für Zuschauer gesperrt ist, muss die View WIRKLICH
+      // umgeschaltet werden (showView, nicht nur curView) — sonst bleibt die Übersicht
+      // (mit dem Setup-Bildschirm) im DOM sichtbar. Nur beim ERSTEN Laden umleiten,
+      // nicht bei jedem Firebase-Update (sonst springt der Zuschauer aus der KO-Ansicht).
+      if(!_spectatorViewInit && curView !== 'groups' && curView !== 'knockout'){
+        spectatorNeedsRedirect = true;
       }
+      _spectatorViewInit = true;
     }
 
     // Falls bereits ein Team eingeloggt war (z.B. nach Reload): Banner wiederherstellen,
@@ -1574,7 +1580,11 @@ function connectToTournament(id, isNew=false, initialState=null){
       activeTeam = null;
       localStorage.removeItem(ATK);
     }
-    renderAll();
+    if(spectatorNeedsRedirect){
+      showView('groups'); // Echte DOM-Umschaltung auf Gruppen-Ansicht
+    } else {
+      renderAll();
+    }
     startSnapshotTimer(); // Auto-Snapshots erst starten, wenn Turnier tatsächlich verbunden ist
     bindFirebaseConnectionListener(); // Online/Offline-Indikator mit Firebase-Verbindung koppeln
   }, err => {
@@ -1610,6 +1620,7 @@ function disconnectTournament(){
   localStorage.removeItem(LK);
   localStorage.removeItem(SPECK); // Zuschauer-Modus zurücksetzen
   spectatorMode = false;
+  _spectatorViewInit = false;
   activeTeam = null;
   localStorage.removeItem(ATK);
   document.getElementById('team-banner').style.display='none';
@@ -3340,6 +3351,9 @@ function renderStatsView(){
 // RENDER VIEWS
 // ═══════════════════════════════════════════════════════════════
 function renderOv(){
+  // Sicherheitsnetz: Zuschauer dürfen NIEMALS die Setup-Karte sehen. Falls die
+  // Übersicht bei einem Zuschauer doch gerendert wird, direkt auf Gruppen umleiten.
+  if(spectatorMode){ showView('groups'); return; }
   if(S.phase==='setup'){document.getElementById('setup-card').style.display='block';document.getElementById('ov-live').style.display='none';document.getElementById('champ-banner').style.display='none';return;}
   document.getElementById('setup-card').style.display='none';document.getElementById('ov-live').style.display='block';
   const gm=Object.values(S.groupMatches).flat(), ko=S.koRounds.flatMap(r=>r.matches).filter(m=>!m.isFrei);
