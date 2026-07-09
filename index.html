@@ -457,8 +457,11 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
   <div class="card" id="setup-card">
     <div class="sec-title">Turnier einrichten</div>
     <p style="color:var(--muted);font-size:13px;margin-bottom:12px;">Teams eingeben, Gruppen und Tiebreaker festlegen.</p>
-    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:6px;">① Turniername</div>
-    <input type="text" id="setup-name" placeholder="z.B. Schümmelcup 2026" style="width:100%;padding:10px;border-radius:6px;border:1px solid var(--border);font-size:14px;margin-bottom:14px;">
+    <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:6px;">① Turniername &amp; Datum</div>
+    <div style="display:flex;gap:10px;margin-bottom:14px;">
+      <input type="text" id="setup-name" placeholder="z.B. Schümmelcup 2026" style="flex:1;padding:10px;border-radius:6px;border:1px solid var(--border);font-size:14px;">
+      <input type="date" id="setup-date" style="padding:10px;border-radius:6px;border:1px solid var(--border);font-size:14px;">
+    </div>
     <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:6px;">② Teams (eine Zeile pro Team)</div>
     <textarea id="setup-teams" rows="9" placeholder="Team Blau&#10;Team Rot&#10;Alt-Herren FC..."></textarea>
     <div style="margin-top:14px;font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">③ Modus &amp; Gruppen</div>
@@ -1774,9 +1777,14 @@ function saveMatchInKO(matchId){
 function updateTournamentNameDisplay(){
   const el = document.getElementById('current-tournament-name');
   if(!el) return;
-  if(S.meta?.name){ el.textContent = S.meta.name; return; }
-  // Kein Name gesetzt: neutral den Code zeigen statt "Turnier ohne Namen"
-  el.textContent = `Schümmelcup — Code: ${TID}`;
+  let text = S.meta?.name || `Schümmelcup — Code: ${TID}`;
+  if(S.meta?.date){
+    try {
+      const d = new Date(S.meta.date+'T12:00:00');
+      text += ' — ' + d.toLocaleDateString('de-DE',{day:'numeric',month:'long',year:'numeric'});
+    } catch(e){}
+  }
+  el.textContent = text;
 }
 
 
@@ -2737,7 +2745,8 @@ function startTournament(){
   const groupMatches={};
   groups.forEach((g,gi)=>{ groupMatches[gi]=genMatches(g.teams, legs); });
   S=Object.assign(dflt(),{phase:'editing',adminPin:apin,tiebreaker:tb,requirePin,rosterMode,groups,teamPins:makePins(teams),rosters:{},groupMatches,koRounds:[]});
-  S.meta = { name: tname, createdAt: Date.now() };
+  const tdate = document.getElementById('setup-date')?.value || '';
+  S.meta = { name: tname, date: tdate, createdAt: Date.now() };
   S.legs = legs;
   S.leagueMode = isLeague;
   // Platzierungsspiele werden im Editor-Schritt gewählt (auch im Liga-Modus).
@@ -3713,7 +3722,7 @@ function exportSchedulePDF(){
     </div>
   </div>
   <div class="pdf-info">
-    <span>📅 ${new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span>
+    <span>📅 ${S.meta?.date ? new Date(S.meta.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span>
     ${sched?`<span>🕐 Anstoß: ${sched.firstTime} Uhr</span>`:''}
     ${schedInfo?`<span>⚽ ${schedInfo}</span>`:''}
     <span>👥 ${allTeams().length} Teams · ${S.groups.length} ${S.leagueMode?'Liga':'Gruppen'}</span>
@@ -4228,6 +4237,8 @@ function resetAll(){
 setupPWA();
 // initApp() kommt aus gate_js.js — verbindet zu Firebase-Turnier oder zeigt Gate
 initApp();
+// Datumsfeld im Setup auf heute vorbelegen
+try { document.getElementById('setup-date').value = new Date().toISOString().slice(0,10); } catch(e){}
 
 </script>
 </body>
