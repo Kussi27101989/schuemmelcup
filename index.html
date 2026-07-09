@@ -3675,12 +3675,24 @@ function exportSchedulePDF(){
   const w = window.open('', '_blank');
   if(!w){ alert('Bitte Pop-ups für diese Seite erlauben, um den PDF-Export zu nutzen.'); return; }
 
+  const sched = S.schedule;
+  const schedInfo = sched ? `Spieldauer: ${sched.pureMatch||sched.halfLen} Min.${sched.halves===2?' (2 Halbzeiten à '+sched.halfLen+' Min.)':''} · Pause zwischen Spielen: ${sched.gapLen||0} Min.${sched.koPause?' · Pause vor KO-Runde: '+sched.koPause+' Min.':''}` : '';
+
+  // Vereinslogo für den PDF-Header: aus dem bestehenden Wappen-Element lesen
+  const wappenEl = document.querySelector('.wappen');
+  const logoSrc = wappenEl ? wappenEl.src : '';
+
   let html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
   <title>Spielplan – ${esc(S.meta?.name||'Schümmelcup')}</title>
   <style>
-    body{font-family:Arial,Helvetica,sans-serif;color:#09183A;margin:24px;}
-    h1{font-size:22px;margin-bottom:2px;}
-    h2{font-size:12px;color:#5B6F96;font-weight:normal;margin-top:0;margin-bottom:20px;text-transform:uppercase;letter-spacing:1px;}
+    body{font-family:Arial,Helvetica,sans-serif;color:#09183A;margin:0;padding:0;}
+    .pdf-header{background:linear-gradient(135deg,#00317A,#0050A0);color:#fff;padding:20px 24px;display:flex;align-items:center;gap:16px;}
+    .pdf-header img{width:56px;height:56px;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3));}
+    .pdf-title{font-size:24px;font-weight:900;letter-spacing:1px;text-transform:uppercase;}
+    .pdf-sub{font-size:11px;opacity:.72;letter-spacing:2px;text-transform:uppercase;margin-top:3px;}
+    .pdf-info{background:#f0f4fa;padding:10px 24px;font-size:11px;color:#5B6F96;display:flex;gap:20px;flex-wrap:wrap;align-items:center;border-bottom:2px solid #dde4f0;}
+    .pdf-info span{white-space:nowrap;}
+    .pdf-body{padding:20px 24px;}
     h3{font-size:16px;border-left:4px solid #0050A0;padding-left:8px;margin-top:24px;margin-bottom:8px;}
     table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;}
     th{background:#00317A;color:#fff;padding:6px 8px;text-align:left;}
@@ -3688,12 +3700,25 @@ function exportSchedulePDF(){
     tr:nth-child(even){background:#f5f8fc;}
     .win{font-weight:700;}
     .grp-box{display:inline-block;width:48%;vertical-align:top;margin-right:1%;margin-bottom:14px;}
-    @media print{ .no-print{display:none;} body{margin:10mm;} }
-    .print-btn{background:#0050A0;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;margin-bottom:20px;}
+    @media print{ .no-print{display:none;} body{margin:0;} @page{margin:8mm;} }
+    .print-btn{background:#0050A0;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;margin:20px 24px 0;}
   </style></head><body>
   <button class="print-btn no-print" onclick="window.print()">🖨 Jetzt drucken / als PDF speichern</button>
-  <h1>${esc(S.meta?.name || 'Schümmelcup')}</h1>
-  <h2>Spielplan — Gruppenphase &amp; KO-Runde</h2>`;
+
+  <div class="pdf-header">
+    <img src="${logoSrc}" alt="">
+    <div>
+      <div class="pdf-title">${esc(S.meta?.name || 'Schümmelcup')}</div>
+      <div class="pdf-sub">1. FC Monheim · Alte Herren</div>
+    </div>
+  </div>
+  <div class="pdf-info">
+    <span>📅 ${new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span>
+    ${sched?`<span>🕐 Anstoß: ${sched.firstTime} Uhr</span>`:''}
+    ${schedInfo?`<span>⚽ ${schedInfo}</span>`:''}
+    <span>👥 ${allTeams().length} Teams · ${S.groups.length} ${S.leagueMode?'Liga':'Gruppen'}</span>
+  </div>
+  <div class="pdf-body">`;
 
   // Gruppenphase
   html += `<h3>Gruppenphase</h3><div>`;
@@ -3772,7 +3797,7 @@ function exportSchedulePDF(){
     html += `</tbody></table>`;
   }
 
-  html += `</body></html>`;
+  html += `</div></body></html>`; // schließt .pdf-body + body + html
   w.document.write(html);
   w.document.close();
 }
