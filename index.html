@@ -112,11 +112,6 @@ td.tn{text-align:left;font-weight:600;}
 .btn-start{background:var(--blue);color:#fff;border:none;padding:12px 28px;border-radius:7px;font-size:15px;font-weight:700;}
 .opt-grp{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:10px;}
 .opt-btn{padding:8px 16px;border-radius:6px;border:2px solid var(--border);background:var(--bg);color:var(--muted);font-size:13px;font-weight:600;transition:all .15s;}
-.print-opt{display:flex;align-items:center;gap:10px;padding:8px 0;font-size:14px;cursor:pointer;border-bottom:1px solid var(--bg);}
-.print-opt input{width:18px;height:18px;accent-color:var(--blue);}
-.fmt-btn,.ori-btn{padding:8px 16px;border-radius:6px;border:2px solid var(--border);background:var(--bg);color:var(--muted);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;}
-.fmt-btn.sel,.ori-btn.sel{background:var(--dark);color:#fff;border-color:var(--dark);}
-#print-modal.open{display:flex;}
 .opt-btn.sel{border-color:var(--blue);background:var(--blue);color:#fff;}
 
 /* GROUP EDITOR */
@@ -364,44 +359,6 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
       <button onclick="showHoFStandalone()" style="background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.25);color:#fff;padding:10px 20px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px;">
         🏆 Ewige Bestenliste ansehen
       </button>
-    </div>
-  </div>
-</div>
-
-<!-- DRUCK-KONFIGURATION MODAL -->
-<div id="print-modal" style="display:none;position:fixed;inset:0;background:rgba(0,26,77,.8);z-index:900;align-items:center;justify-content:center;padding:16px;">
-  <div style="background:#fff;border-radius:12px;max-width:480px;width:100%;max-height:90vh;overflow-y:auto;">
-    <div style="background:linear-gradient(135deg,#00317A,#0050A0);padding:16px 20px;border-radius:12px 12px 0 0;">
-      <div style="font-size:18px;font-weight:800;color:#fff;">📄 Drucken / PDF exportieren</div>
-      <div style="font-size:12px;color:rgba(255,255,255,.7);margin-top:4px;">Wähle Inhalte, Format und Ausrichtung</div>
-    </div>
-    <div style="padding:20px;">
-      <div style="font-weight:700;font-size:13px;color:var(--dark);margin-bottom:8px;">Inhalte auswählen</div>
-      <label class="print-opt"><input type="checkbox" id="print-groups" checked> Gruppentabellen</label>
-      <label class="print-opt"><input type="checkbox" id="print-schedule-group" checked> Spielplan Gruppenphase</label>
-      <label class="print-opt"><input type="checkbox" id="print-schedule-ko" checked> Spielplan KO-Phase / Platzierungsspiele</label>
-      <label class="print-opt"><input type="checkbox" id="print-qr-team"> QR-Code (Team-Login)</label>
-      <label class="print-opt"><input type="checkbox" id="print-qr-spectator"> QR-Code (Zuschauer)</label>
-
-      <div style="font-weight:700;font-size:13px;color:var(--dark);margin-top:16px;margin-bottom:8px;">Papierformat</div>
-      <div style="display:flex;gap:6px;flex-wrap:wrap;">
-        <button class="fmt-btn" data-val="A4" onclick="selFmt(this)">A4</button>
-        <button class="fmt-btn" data-val="A3" onclick="selFmt(this)">A3</button>
-        <button class="fmt-btn" data-val="A2" onclick="selFmt(this)">A2</button>
-        <button class="fmt-btn" data-val="A1" onclick="selFmt(this)">A1</button>
-        <button class="fmt-btn" data-val="A0" onclick="selFmt(this)">A0</button>
-      </div>
-
-      <div style="font-weight:700;font-size:13px;color:var(--dark);margin-top:16px;margin-bottom:8px;">Ausrichtung</div>
-      <div style="display:flex;gap:6px;">
-        <button class="ori-btn sel" data-val="portrait" onclick="selOri(this)">📄 Hochformat</button>
-        <button class="ori-btn" data-val="landscape" onclick="selOri(this)">📄 Querformat</button>
-      </div>
-
-      <div style="display:flex;gap:10px;margin-top:20px;">
-        <button onclick="executePrint()" style="flex:1;background:var(--blue);color:#fff;border:none;padding:12px;border-radius:8px;font-size:14px;font-weight:700;cursor:pointer;">🖨 Drucken / PDF</button>
-        <button onclick="closePrintDialog()" style="background:var(--bg);color:var(--dark);border:1px solid var(--border);padding:12px 20px;border-radius:8px;font-size:14px;cursor:pointer;">Abbrechen</button>
-      </div>
     </div>
   </div>
 </div>
@@ -668,7 +625,7 @@ footer{background:var(--dark);color:rgba(255,255,255,.4);text-align:center;paddi
 <div class="view" id="view-schedule">
   <div class="sec-title">Spielplan</div>
   <p style="color:var(--muted);font-size:13px;margin-bottom:10px;">Gesamtübersicht mit allen Teams, Feldern und Anstoßzeiten — Gruppenphase und KO-Runde.</p>
-  <button onclick="openPrintDialog()" style="background:var(--blue);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;margin-bottom:14px;">📄 Drucken / PDF exportieren</button>
+  <button onclick="exportSchedulePDF()" style="background:var(--blue);color:#fff;border:none;padding:8px 16px;border-radius:6px;font-size:13px;font-weight:600;margin-bottom:14px;">📄 Als PDF exportieren / drucken</button>
   <div id="tree-content"><div class="card"><p style="color:var(--muted);">Noch kein Turnier gestartet.</p></div></div>
   <div class="sub-lbl" id="sch-editable-lbl" style="display:none;margin-top:24px;">Ergebnisse eintragen</div>
   <div id="sch-content"></div>
@@ -3720,78 +3677,43 @@ function renderKO(){
 // TURNIERBAUM — Gesamtübersicht: Gruppenphase + KO-Baum
 // ═══════════════════════════════════════════════════════════════
 // ═══════════════════════════════════════════════════════════════
+// PDF-EXPORT / DRUCKANSICHT — öffnet eine eigene, druckoptimierte Seite
+// und löst den Browser-Druckdialog aus ("Als PDF speichern" wählbar).
 // ═══════════════════════════════════════════════════════════════
-// DRUCK / PDF-EXPORT — Konfigurierbarer Ausdruck
-// ═══════════════════════════════════════════════════════════════
-let _printFormat = 'A4';
-let _printOrientation = 'portrait';
-function openPrintDialog(){
-  document.querySelectorAll('.fmt-btn').forEach(b=>b.classList.toggle('sel',b.dataset.val===_printFormat));
-  document.querySelectorAll('.ori-btn').forEach(b=>b.classList.toggle('sel',b.dataset.val===_printOrientation));
-  document.getElementById('print-modal').classList.add('open');
-}
-function closePrintDialog(){ document.getElementById('print-modal').classList.remove('open'); }
-function selFmt(btn){ document.querySelectorAll('.fmt-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); _printFormat=btn.dataset.val; }
-function selOri(btn){ document.querySelectorAll('.ori-btn').forEach(b=>b.classList.remove('sel')); btn.classList.add('sel'); _printOrientation=btn.dataset.val; }
-
-function executePrint(){
-  const opts = {
-    groups: document.getElementById('print-groups')?.checked,
-    schedGroup: document.getElementById('print-schedule-group')?.checked,
-    schedKO: document.getElementById('print-schedule-ko')?.checked,
-    qrTeam: document.getElementById('print-qr-team')?.checked,
-    qrSpectator: document.getElementById('print-qr-spectator')?.checked,
-  };
-  if(!opts.groups && !opts.schedGroup && !opts.schedKO && !opts.qrTeam && !opts.qrSpectator){
-    alert('Bitte mindestens einen Inhalt auswählen.'); return;
-  }
-  closePrintDialog();
-  generatePrintPage(opts, _printFormat, _printOrientation);
-}
-
-function generatePrintPage(opts, fmt, ori){
+function exportSchedulePDF(){
   const w = window.open('', '_blank');
-  if(!w){ alert('Bitte Pop-ups für diese Seite erlauben.'); return; }
+  if(!w){ alert('Bitte Pop-ups für diese Seite erlauben, um den PDF-Export zu nutzen.'); return; }
+
   const sched = S.schedule;
-  const schedInfo = sched ? `Spieldauer: ${sched.pureMatch||sched.halfLen} Min.${sched.halves===2?' (2×'+sched.halfLen+' Min.)':''} · Pause: ${sched.gapLen||0} Min.${sched.koPause?' · KO-Pause: '+sched.koPause+' Min.':''}` : '';
+  const schedInfo = sched ? `Spieldauer: ${sched.pureMatch||sched.halfLen} Min.${sched.halves===2?' (2 Halbzeiten à '+sched.halfLen+' Min.)':''} · Pause zwischen Spielen: ${sched.gapLen||0} Min.${sched.koPause?' · Pause vor KO-Runde: '+sched.koPause+' Min.':''}` : '';
+
+  // Vereinslogo für den PDF-Header: aus dem bestehenden Wappen-Element lesen
   const wappenEl = document.querySelector('.wappen');
   const logoSrc = wappenEl ? wappenEl.src : '';
-  const isLandscape = ori === 'landscape';
-  const sizes = {A0:'841mm 1189mm',A1:'594mm 841mm',A2:'420mm 594mm',A3:'297mm 420mm',A4:'210mm 297mm'};
-  const pageSize = sizes[fmt] || sizes.A4;
-  const scale = {A0:2.8,A1:2,A2:1.5,A3:1.2,A4:1}[fmt] || 1;
-  const fs=Math.round(12*scale), fsH3=Math.round(16*scale), pad=Math.round(24*scale);
-  const logoW=Math.round(56*scale), titleFs=Math.round(24*scale);
-  const grpBoxWidth = isLandscape ? '32%' : '48%';
-  const qrSize = Math.round(200*scale);
 
   let html = `<!DOCTYPE html><html lang="de"><head><meta charset="UTF-8">
-  <title>Druck – ${esc(S.meta?.name||'Schümmelcup')}</title>
+  <title>Spielplan – ${esc(S.meta?.name||'Schümmelcup')}</title>
   <style>
-    *{box-sizing:border-box;}
-    body{font-family:Arial,Helvetica,sans-serif;color:#09183A;margin:0;padding:0;font-size:${fs}px;}
-    .pdf-header{background:linear-gradient(135deg,#00317A,#0050A0);color:#fff;padding:${pad}px;display:flex;align-items:center;gap:${Math.round(16*scale)}px;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .pdf-header img{width:${logoW}px;height:${logoW}px;object-fit:contain;}
-    .pdf-title{font-size:${titleFs}px;font-weight:900;letter-spacing:1px;text-transform:uppercase;}
-    .pdf-sub{font-size:${Math.round(11*scale)}px;opacity:.72;letter-spacing:2px;text-transform:uppercase;margin-top:3px;}
-    .pdf-info{background:#f0f4fa;padding:${Math.round(10*scale)}px ${pad}px;font-size:${Math.round(11*scale)}px;color:#5B6F96;display:flex;gap:${Math.round(20*scale)}px;flex-wrap:wrap;border-bottom:2px solid #dde4f0;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    .pdf-body{padding:${pad}px;}
-    h3{font-size:${fsH3}px;border-left:4px solid #0050A0;padding-left:${Math.round(8*scale)}px;margin-top:${pad}px;margin-bottom:${Math.round(8*scale)}px;}
-    table{width:100%;border-collapse:collapse;font-size:${fs}px;margin-bottom:${Math.round(12*scale)}px;}
-    th{background:#00317A;color:#fff;padding:${Math.round(6*scale)}px ${Math.round(8*scale)}px;text-align:left;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
-    td{padding:${Math.round(5*scale)}px ${Math.round(8*scale)}px;border-bottom:1px solid #ddd;}
-    tr:nth-child(even){background:#f5f8fc;-webkit-print-color-adjust:exact;print-color-adjust:exact;}
+    body{font-family:Arial,Helvetica,sans-serif;color:#09183A;margin:0;padding:0;}
+    .pdf-header{background:linear-gradient(135deg,#00317A,#0050A0);color:#fff;padding:20px 24px;display:flex;align-items:center;gap:16px;}
+    .pdf-header img{width:56px;height:56px;object-fit:contain;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3));}
+    .pdf-title{font-size:24px;font-weight:900;letter-spacing:1px;text-transform:uppercase;}
+    .pdf-sub{font-size:11px;opacity:.72;letter-spacing:2px;text-transform:uppercase;margin-top:3px;}
+    .pdf-info{background:#f0f4fa;padding:10px 24px;font-size:11px;color:#5B6F96;display:flex;gap:20px;flex-wrap:wrap;align-items:center;border-bottom:2px solid #dde4f0;}
+    .pdf-info span{white-space:nowrap;}
+    .pdf-body{padding:20px 24px;}
+    h3{font-size:16px;border-left:4px solid #0050A0;padding-left:8px;margin-top:24px;margin-bottom:8px;}
+    table{width:100%;border-collapse:collapse;font-size:12px;margin-bottom:12px;}
+    th{background:#00317A;color:#fff;padding:6px 8px;text-align:left;}
+    td{padding:5px 8px;border-bottom:1px solid #ddd;}
+    tr:nth-child(even){background:#f5f8fc;}
     .win{font-weight:700;}
-    .grp-box{display:inline-block;width:${grpBoxWidth};vertical-align:top;margin-right:1%;margin-bottom:${Math.round(14*scale)}px;}
-    .qr-section{text-align:center;padding:${pad}px;page-break-inside:avoid;}
-    .qr-label{font-size:${Math.round(18*scale)}px;font-weight:700;margin-bottom:${Math.round(10*scale)}px;}
-    .qr-url{font-size:${Math.round(10*scale)}px;color:#5B6F96;word-break:break-all;margin-top:${Math.round(8*scale)}px;}
-    @media print{.no-print{display:none;} @page{size:${isLandscape?pageSize.split(' ').reverse().join(' '):pageSize};margin:${Math.round(8*scale)}mm;}}
-    .print-btn{background:#0050A0;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;margin:20px ${pad}px;}
-  </style>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/script>
-  </head><body>
+    .grp-box{display:inline-block;width:48%;vertical-align:top;margin-right:1%;margin-bottom:14px;}
+    @media print{ .no-print{display:none;} body{margin:0;} @page{margin:8mm;} }
+    .print-btn{background:#0050A0;color:#fff;border:none;padding:10px 20px;border-radius:6px;font-size:14px;cursor:pointer;margin:20px 24px 0;}
+  </style></head><body>
   <button class="print-btn no-print" onclick="window.print()">🖨 Jetzt drucken / als PDF speichern</button>
+
   <div class="pdf-header">
     <img src="${logoSrc}" alt="">
     <div>
@@ -3801,82 +3723,93 @@ function generatePrintPage(opts, fmt, ori){
   </div>
   <div class="pdf-info">
     <span>📅 ${S.meta?.date ? new Date(S.meta.date+'T12:00:00').toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'}) : new Date().toLocaleDateString('de-DE',{weekday:'long',day:'numeric',month:'long',year:'numeric'})}</span>
-    ${sched?`<span>🕐 ${sched.firstTime} Uhr</span>`:''}
+    ${sched?`<span>🕐 Anstoß: ${sched.firstTime} Uhr</span>`:''}
     ${schedInfo?`<span>⚽ ${schedInfo}</span>`:''}
-    <span>👥 ${allTeams().length} Teams · ${S.groups.length} ${S.leagueMode?'Liga':'Gr.'}</span>
+    <span>👥 ${allTeams().length} Teams · ${S.groups.length} ${S.leagueMode?'Liga':'Gruppen'}</span>
   </div>
   <div class="pdf-body">`;
 
-  if(opts.groups){
-    html += `<h3>${S.leagueMode?'Ligatabelle':'Gruppenphase'}</h3><div>`;
-    S.groups.forEach((g,gi)=>{
-      const rows = standings(g.teams, S.groupMatches[gi]||[]);
-      html += `<div class="grp-box"><strong>${S.leagueMode?'Liga':'Gruppe '+esc(g.name)}</strong>
-        <table><thead><tr><th>#</th><th>Team</th><th>Pkt</th><th>Tore</th></tr></thead><tbody>`;
-      rows.forEach((r,i)=>{ html+=`<tr><td>${i+1}</td><td>${esc(r.team)}</td><td>${r.pkt}</td><td>${r.tore}:${r.gegen}</td></tr>`; });
-      html += `</tbody></table></div>`;
+  // Gruppenphase
+  html += `<h3>Gruppenphase</h3><div>`;
+  S.groups.forEach((g,gi)=>{
+    const rows = standings(g.teams, S.groupMatches[gi]||[]);
+    html += `<div class="grp-box"><strong>Gruppe ${esc(g.name)}</strong>
+      <table><thead><tr><th>#</th><th>Team</th><th>Pkt</th><th>Tore</th></tr></thead><tbody>`;
+    rows.forEach((r,i)=>{
+      html += `<tr><td>${i+1}</td><td>${esc(r.team)}</td><td>${r.pkt}</td><td>${r.tore}:${r.gegen}</td></tr>`;
     });
-    html += `</div>`;
+    html += `</tbody></table></div>`;
+  });
+  html += `</div>`;
+
+  // Spielplan Gruppenphase chronologisch
+  html += `<h3>Spielplan Gruppenphase</h3><table><thead><tr><th>Zeit</th><th>Feld</th><th>Gruppe</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
+  const allGroupMatches = [];
+  S.groups.forEach((g,gi)=>(S.groupMatches[gi]||[]).forEach(m=>allGroupMatches.push({...m, grp:g.name})));
+  allGroupMatches.sort((a,b)=> (a.time||'').localeCompare(b.time||'') || (a.field||0)-(b.field||0));
+  allGroupMatches.forEach(m=>{
+    const played = m.h!==''&&m.a!=='';
+    html += `<tr><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(m.grp)}</td><td>${esc(m.home)}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(m.away)}</td></tr>`;
+  });
+  html += `</tbody></table>`;
+
+  // KO-Runde: Wenn die echte KO-Runde schon generiert wurde, diese nutzen.
+  // Andernfalls die VORSCHAU mit Platzhaltern ("Sieger Gruppe A", "Sieger HF1" usw.),
+  // damit im Ausdruck immer der komplette Turnierbaum sichtbar ist — auch während
+  // die Gruppenphase noch läuft.
+  let koRoundsForPrint = S.koRounds;
+  let placementForPrint = S.placementGames;
+  let isKOPreview = false;
+  if(S.leagueMode){
+    // Liga: keine KO-Runde. Platzierungsspiele echt (falls generiert) oder als Vorschau.
+    koRoundsForPrint = [];
+    if(!S.placementGames || !S.placementGames.length){
+      const prev = buildLeaguePlacementPreview();
+      if(prev.placementGames.length){ placementForPrint = prev.placementGames; isKOPreview = true; }
+    }
+  } else if(!S.koRounds.length){
+    const preview = buildKOPreviewWithTiming();
+    if(preview.koRounds.length){
+      koRoundsForPrint = preview.koRounds;
+      placementForPrint = preview.placementGames;
+      isKOPreview = true;
+    }
   }
 
-  if(opts.schedGroup){
-    html += `<h3>Spielplan ${S.leagueMode?'Liga':'Gruppenphase'}</h3><table><thead><tr><th>Zeit</th><th>Feld</th>${S.leagueMode?'':'<th>Gr.</th>'}<th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
-    const allGM = [];
-    S.groups.forEach((g,gi)=>(S.groupMatches[gi]||[]).forEach(m=>allGM.push({...m,grp:g.name})));
-    allGM.sort((a,b)=>(a.time||'').localeCompare(b.time||'')||(a.field||0)-(b.field||0));
-    allGM.forEach(m=>{
-      const played=m.h!==''&&m.a!=='';
-      html+=`<tr><td>${m.time||'-'}</td><td>${m.field||'-'}</td>${S.leagueMode?'':`<td>${esc(m.grp)}</td>`}<td>${esc(m.home)}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(m.away)}</td></tr>`;
+  if(koRoundsForPrint && koRoundsForPrint.length){
+    const previewNote = isKOPreview ? ' <span style="font-size:11px;color:#5B6F96;font-weight:normal;">(Vorschau — Teilnehmer stehen nach der Gruppenphase fest)</span>' : '';
+    html += `<h3>KO-Runde${previewNote}</h3><table><thead><tr><th>Runde</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
+    koRoundsForPrint.forEach(r=>{
+      r.matches.forEach(m=>{
+        if(m.isFrei) return;
+        const played = m.h!==''&&m.a!=='';
+        html += `<tr><td>${esc(r.name)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td class="${m.winner&&m.winner===m.home?'win':''}">${esc(teamLabel(m,'home'))}</td><td>${played?scoreText(m):'–:–'}</td><td class="${m.winner&&m.winner===m.away?'win':''}">${esc(teamLabel(m,'away'))}</td></tr>`;
+      });
     });
-    html+=`</tbody></table>`;
+    html += `</tbody></table>`;
   }
 
-  if(opts.schedKO){
-    let koR=S.koRounds, plc=S.placementGames, isPv=false;
-    if(S.leagueMode){
-      koR=[];
-      if(!plc||!plc.length){const p=buildLeaguePlacementPreview();plc=p.placementGames;isPv=true;}
-    } else if(!S.koRounds.length){
-      const p=buildKOPreviewWithTiming();koR=p.koRounds;plc=p.placementGames;isPv=true;
-    }
-    if(koR&&koR.length){
-      html+=`<h3>KO-Runde${isPv?' <span style="font-size:'+Math.round(11*scale)+'px;color:#5B6F96;">(Vorschau)</span>':''}</h3><table><thead><tr><th>Runde</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
-      koR.forEach(r=>r.matches.forEach(m=>{
-        if(m.isFrei)return;const played=m.h!==''&&m.a!=='';
-        html+=`<tr><td>${esc(r.name)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(teamLabel(m,'home'))}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(teamLabel(m,'away'))}</td></tr>`;
-      }));
-      html+=`</tbody></table>`;
-    }
-    if(plc&&plc.length){
-      html+=`<h3>Platzierungsspiele${isPv?' <span style="font-size:'+Math.round(11*scale)+'px;color:#5B6F96;">(Vorschau)</span>':''}</h3><table><thead><tr><th>Spiel</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
-      plc.forEach(pg=>pg.matches.forEach(m=>{
-        const played=m.h!==''&&m.a!=='';
-        html+=`<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(teamLabel(m,'home'))}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(teamLabel(m,'away'))}</td></tr>`;
-      }));
-      html+=`</tbody></table>`;
-    }
+  // Platzierungsspiele (KO: Verlierer-basiert; Liga: Tabellenplatz-basiert)
+  if(placementForPrint && placementForPrint.length){
+    const plNote = isKOPreview
+      ? (S.leagueMode
+          ? ' <span style="font-size:11px;color:#5B6F96;font-weight:normal;">(Vorschau — Teams stehen nach der Liga fest)</span>'
+          : ' <span style="font-size:11px;color:#5B6F96;font-weight:normal;">(Vorschau)</span>')
+      : '';
+    html += `<h3>Platzierungsspiele${plNote}</h3><table><thead><tr><th>Spiel</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
+    placementForPrint.forEach(pg=>{
+      pg.matches.forEach(m=>{
+        const played = m.h!==''&&m.a!=='';
+        html += `<tr><td>${esc(pg.label)}</td><td>${m.time||'-'}</td><td>${m.field||'-'}</td><td>${esc(teamLabel(m,'home'))}</td><td>${played?scoreText(m):'–:–'}</td><td>${esc(teamLabel(m,'away'))}</td></tr>`;
+      });
+    });
+    html += `</tbody></table>`;
   }
 
-  if(opts.qrTeam||opts.qrSpectator){
-    const baseUrl=window.location.href.split('?')[0]+'?t='+encodeURIComponent(TID);
-    if(opts.qrTeam) html+=`<div class="qr-section"><div class="qr-label">⚽ Team-Login</div><p style="color:#5B6F96;">QR-Code scannen → Team wählen → PIN eingeben</p><div id="qr-print-team"></div><div class="qr-url">${esc(baseUrl)}</div></div>`;
-    if(opts.qrSpectator) html+=`<div class="qr-section"><div class="qr-label">👀 Zuschauer</div><p style="color:#5B6F96;">QR-Code scannen → Live-Spielstände</p><div id="qr-print-spectator"></div><div class="qr-url">${esc(baseUrl+'&spectator=1')}</div></div>`;
-  }
-
-  html+=`</div>`;
-  if(opts.qrTeam||opts.qrSpectator){
-    const bUrl=window.location.href.split('?')[0]+'?t='+encodeURIComponent(TID);
-    html+=`<script>window.addEventListener('load',function(){`;
-    if(opts.qrTeam) html+=`new QRCode(document.getElementById('qr-print-team'),{text:'${bUrl}',width:${qrSize},height:${qrSize},correctLevel:QRCode.CorrectLevel.M});`;
-    if(opts.qrSpectator) html+=`new QRCode(document.getElementById('qr-print-spectator'),{text:'${bUrl}&spectator=1',width:${qrSize},height:${qrSize},correctLevel:QRCode.CorrectLevel.M});`;
-    html+=`});<\/script>`;
-  }
-  html+=`</body></html>`;
+  html += `</div></body></html>`; // schließt .pdf-body + body + html
   w.document.write(html);
   w.document.close();
-  setTimeout(()=>w.print(), opts.qrTeam||opts.qrSpectator ? 800 : 300);
 }
-
 
 // Vorschau der Liga-Platzierungsspiele mit Platzhaltern ("1. der Tabelle" usw.)
 // UND berechneten Anstoßzeiten. Analog zu buildKOPreviewWithTiming, aber für den
