@@ -3614,23 +3614,22 @@ function renderGrp(){
       <div style="margin-top:16px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Spiele</div>
       ${(S.groupMatches[gi]||[]).map(m=>mcHTML(m,'saveGM',true)).join('')}
     </div>`).join('');
-  // Im Liga-Modus: Platzierungsspiele (Finale, Platz 3, ...) unter der Tabelle anzeigen.
-  // Vor Abschluss der Liga als Vorschau mit Platzhaltern, danach mit echten Teams.
+  // Im Liga-Modus: Platzierungsspiele unter der Tabelle. Vor Abschluss der Liga als
+  // Vorschau mit Platzhaltern ("1. der Tabelle"), danach mit echten Teams.
   if(S.leagueMode){
     let placementToShow = S.placementGames || [];
     let isPreview = false;
     if(!placementToShow.length){
-      const preview = buildLeaguePlacementPreview();
-      placementToShow = preview.placementGames;
+      placementToShow = buildLeaguePlacementPreview().placementGames;
       isPreview = true;
     }
     if(placementToShow.length){
-      grpHtml += `<div class="tree-phase-lbl" style="margin-top:20px;">Platzierungsspiele${isPreview?' <span style="font-size:11px;color:var(--orange);font-weight:400;text-transform:none;letter-spacing:0;">(Vorschau — Teams stehen nach der Liga fest)</span>':''}</div>`;
+      grpHtml += `<div class="sub-lbl" style="margin-top:20px;">Platzierungsspiele${isPreview?' <span style="font-size:11px;color:var(--orange);font-weight:400;">(Vorschau — Teams stehen nach der Liga fest)</span>':''}</div>`;
       grpHtml += placementToShow.map(pg=>`
         <div class="card" style="border-left:4px solid var(--green);">
           <div class="ko-title">${pg.key==='liga_1_2'?'🏆 ':'🥉 '}${esc(pg.label)}</div>
           ${pg.matches.map(m=> isPreview
-            ? `<div style="padding:8px 4px;font-size:14px;">${esc(teamLabel(m,'home'))} <span style="color:var(--muted);">vs</span> ${esc(teamLabel(m,'away'))}${m.time?` <span style="color:var(--muted);font-size:12px;">— ${m.time} Uhr, Feld ${m.field}</span>`:''}</div>`
+            ? `<div style="padding:10px 4px;font-size:14px;">${esc(teamLabel(m,'home'))} <span style="color:var(--muted);">vs</span> ${esc(teamLabel(m,'away'))}${m.time?`<br><span style="color:var(--muted);font-size:12px;">🕐 ${m.time} Uhr · Feld ${m.field}</span>`:''}</div>`
             : mcHTML(m,'saveKO',true)
           ).join('')}
         </div>`).join('');
@@ -3722,10 +3721,11 @@ function exportSchedulePDF(){
   let placementForPrint = S.placementGames;
   let isKOPreview = false;
   if(S.leagueMode){
-    // Liga-Modus: Platzierungsspiele mit echten Teams (falls generiert) oder Vorschau
+    // Liga: keine KO-Runde. Platzierungsspiele echt (falls generiert) oder als Vorschau.
+    koRoundsForPrint = [];
     if(!S.placementGames || !S.placementGames.length){
-      const preview = buildLeaguePlacementPreview();
-      if(preview.placementGames.length){ placementForPrint = preview.placementGames; isKOPreview = true; }
+      const prev = buildLeaguePlacementPreview();
+      if(prev.placementGames.length){ placementForPrint = prev.placementGames; isKOPreview = true; }
     }
   } else if(!S.koRounds.length){
     const preview = buildKOPreviewWithTiming();
@@ -3749,9 +3749,13 @@ function exportSchedulePDF(){
     html += `</tbody></table>`;
   }
 
-  // Platzierungsspiele (KO-Modus: Verlierer-basiert; Liga-Modus: Tabellenplatz-basiert)
+  // Platzierungsspiele (KO: Verlierer-basiert; Liga: Tabellenplatz-basiert)
   if(placementForPrint && placementForPrint.length){
-    const plNote = (S.leagueMode && isKOPreview) ? ' <span style="font-size:11px;color:#5B6F96;font-weight:normal;">(Vorschau — Teilnehmer stehen nach der Liga fest)</span>' : '';
+    const plNote = isKOPreview
+      ? (S.leagueMode
+          ? ' <span style="font-size:11px;color:#5B6F96;font-weight:normal;">(Vorschau — Teams stehen nach der Liga fest)</span>'
+          : ' <span style="font-size:11px;color:#5B6F96;font-weight:normal;">(Vorschau)</span>')
+      : '';
     html += `<h3>Platzierungsspiele${plNote}</h3><table><thead><tr><th>Spiel</th><th>Zeit</th><th>Feld</th><th>Heim</th><th>Erg.</th><th>Gast</th></tr></thead><tbody>`;
     placementForPrint.forEach(pg=>{
       pg.matches.forEach(m=>{
@@ -3767,26 +3771,21 @@ function exportSchedulePDF(){
   w.document.close();
 }
 
-// Erstellt eine VOLLSTÄNDIGE Vorschau der KO-Phase inkl. Anstoßzeiten und
-// Platzierungsspielen — ohne den echten State zu verändern. Wird genutzt,
-// damit der chronologische Zeitplan von Anfang an (auch vor Abschluss der
-// Gruppenphase) zeigt, WANN die KO-Spiele stattfinden würden, mit
-// Platzhalter-Namen wie "Sieger Gr. A", bis die echten Teams feststehen.
 // Vorschau der Liga-Platzierungsspiele mit Platzhaltern ("1. der Tabelle" usw.)
-// UND berechneten Anstoßzeiten — analog zu buildKOPreviewWithTiming, aber für den
-// Liga-Modus. Zeigt schon vor Abschluss der Liga, welche Entscheidungsspiele
-// gespielt werden und wann.
+// UND berechneten Anstoßzeiten. Analog zu buildKOPreviewWithTiming, aber für den
+// Liga-Modus: Hier gibt es kein Bracket, sondern Entscheidungsspiele zwischen
+// benachbarten Tabellenplätzen (Finale 1v2, Platz 3 = 3v4, Platz 5 = 5v6, ...).
 function buildLeaguePlacementPreview(){
-  if(!S.leagueMode) return { placementGames:[] };
-  if(!S.placement || !S.placement.selected || !S.placement.selected.length) return { placementGames:[] };
+  if(!S.leagueMode) return { koRounds:[], placementGames:[] };
+  const sel = (S.placement && S.placement.selected) || [];
+  if(!sel.length) return { koRounds:[], placementGames:[] };
+  const teamCount = (S.groups[0] && S.groups[0].teams) ? S.groups[0].teams.length : 0;
   const games = [];
-  S.placement.selected.forEach(key=>{
-    const m = key.match(/^liga_(\d+)_(\d+)$/);
-    if(!m) return;
-    const topRank = parseInt(m[1]), lowerRank = parseInt(m[2]);
-    // Nur anzeigen, wenn beide Tabellenplätze existieren können
-    const teamCount = S.groups[0]?.teams.length || 0;
-    if(lowerRank > teamCount) return;
+  sel.forEach(key=>{
+    const mm = String(key).match(/^liga_(\d+)_(\d+)$/);
+    if(!mm) return;
+    const topRank = parseInt(mm[1]), lowerRank = parseInt(mm[2]);
+    if(lowerRank > teamCount) return; // Platz existiert nicht
     const label = topRank===1 ? 'Finale (1. vs 2.)' : `Spiel um Platz ${topRank}`;
     const resultLabel = topRank===1 ? 'Platz 1/2' : `Platz ${topRank}/${lowerRank}`;
     games.push({
@@ -3794,31 +3793,41 @@ function buildLeaguePlacementPreview(){
       matches:[{
         id:'preview_'+key, home:'?', away:'?',
         homeFrom:`${topRank}. der Tabelle`, awayFrom:`${lowerRank}. der Tabelle`,
-        h:'',a:'',time:'',locked:false,isFrei:false
+        h:'', a:'', time:'', field:1, locked:false, isFrei:false, events:[]
       }]
     });
   });
-
-  // Anstoßzeiten berechnen (nach dem letzten Ligaspiel + Pause)
+  // Nach Tabellenplatz sortieren (Finale zuerst, dann Platz 3, Platz 5, ...)
+  games.sort((a,b)=>{
+    const ra = parseInt(String(a.key).match(/^liga_(\d+)_/)[1]);
+    const rb = parseInt(String(b.key).match(/^liga_(\d+)_/)[1]);
+    return ra - rb;
+  });
+  // Anstoßzeiten: nach dem letzten Ligaspiel + optionale Pause, verteilt auf die Felder
   const sched = S.schedule;
   if(sched && games.length){
     const allGM = Object.values(S.groupMatches).flat();
     const leagueEnd = latestMatchEnd(allGM, sched.matchDuration, sched.fieldsGroup, sched.firstTime);
-    const koPauseMin = sched.koPause || 0;
-    const toMin=(t)=>{const[h,mm]=String(t).split(':').map(Number);return h*60+mm;};
-    const toHHMM=(mins)=>{const hh=Math.floor(mins/60)%24,mm=mins%60;return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;};
-    const startMin = toMin(leagueEnd) + koPauseMin;
+    const pauseMin = sched.koPause || 0;
+    const toMin = (t)=>{ const [h,m]=String(t).split(':').map(Number); return h*60+m; };
+    const toHHMM = (mins)=>{ const hh=Math.floor(mins/60)%24, mm=mins%60; return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
+    const startMin = toMin(leagueEnd) + pauseMin;
     const fields = sched.fieldsKO || 1;
-    const allMatches = games.flatMap(pg=>pg.matches);
-    allMatches.forEach((mm, idx)=>{
-      const slot = Math.floor(idx/fields);
-      mm.time = toHHMM(startMin + slot*sched.matchDuration);
-      mm.field = (idx % fields) + 1;
+    const flat = games.flatMap(pg=>pg.matches);
+    flat.forEach((m, idx)=>{
+      const slot = Math.floor(idx / fields);
+      m.time = toHHMM(startMin + slot * sched.matchDuration);
+      m.field = (idx % fields) + 1;
     });
   }
-  return { placementGames: games };
+  return { koRounds:[], placementGames: games };
 }
 
+// Erstellt eine VOLLSTÄNDIGE Vorschau der KO-Phase inkl. Anstoßzeiten und
+// Platzierungsspielen — ohne den echten State zu verändern. Wird genutzt,
+// damit der chronologische Zeitplan von Anfang an (auch vor Abschluss der
+// Gruppenphase) zeigt, WANN die KO-Spiele stattfinden würden, mit
+// Platzhalter-Namen wie "Sieger Gr. A", bis die echten Teams feststehen.
 function buildKOPreviewWithTiming(){
   const { seeded } = computeQualifiers(); // placeholdersOnly=true (Standard)
   if(seeded.length < 2) return { koRounds:[], placementGames:[] };
@@ -3879,7 +3888,9 @@ function renderTree(){
 
   // Falls die KO-Runde noch nicht final generiert ist, aber Zeitplan + Gruppen feststehen:
   // Vorschau-Daten berechnen (mit Platzhalter-Namen + echten Anstoßzeiten), damit der
-  // chronologische Zeitplan unten vollständig ist. Im Liga-Modus: Platzierungsspiel-Vorschau.
+  // chronologische Zeitplan unten vollständig ist.
+  // Vorschau-Daten: Im Liga-Modus die Platzierungsspiel-Vorschau (Tabellenplätze),
+  // sonst die KO-Bracket-Vorschau. Nur solange die echten Spiele noch nicht generiert sind.
   const previewData = S.leagueMode
     ? ((!S.placementGames || !S.placementGames.length) ? buildLeaguePlacementPreview() : null)
     : ((!S.koRounds.length && S.phase==='group') ? buildKOPreviewWithTiming() : null);
