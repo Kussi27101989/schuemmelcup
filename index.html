@@ -3431,6 +3431,12 @@ function generateLeaguePlacementGames(){
       }]
     });
   });
+  // Absteigende Sortierung: niedrigere Platzierungen zuerst, Finale zuletzt
+  games.sort((a,b)=>{
+    const ra = parseInt(String(a.key).match(/^liga_(\d+)_/)?.[1]||'0');
+    const rb = parseInt(String(b.key).match(/^liga_(\d+)_/)?.[1]||'0');
+    return rb - ra;
+  });
   S.placementGames = games;
 }
 
@@ -3797,11 +3803,12 @@ function buildLeaguePlacementPreview(){
       }]
     });
   });
-  // Nach Tabellenplatz sortieren (Finale zuerst, dann Platz 3, Platz 5, ...)
+  // Absteigende Sortierung: erst die niedrigeren Platzierungsspiele (Platz 5, Platz 3),
+  // dann das Finale als letztes — wie bei einem echten Turnier (Höhepunkt am Ende).
   games.sort((a,b)=>{
     const ra = parseInt(String(a.key).match(/^liga_(\d+)_/)[1]);
     const rb = parseInt(String(b.key).match(/^liga_(\d+)_/)[1]);
-    return ra - rb;
+    return rb - ra; // absteigend: höhere Plätze (5,6) zuerst, Finale (1,2) zuletzt
   });
   // Anstoßzeiten: nach dem letzten Ligaspiel + optionale Pause, verteilt auf die Felder
   const sched = S.schedule;
