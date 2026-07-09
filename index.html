@@ -1821,13 +1821,11 @@ function saveMatchInKO(matchId){
 function updateTournamentNameDisplay(){
   const el = document.getElementById('current-tournament-name');
   if(!el) return;
-  let text = S.meta?.name || `Schümmelcup — Code: ${TID}`;
+  let text = S.meta?.name || 'Schümmelcup';
   if(S.meta?.date){
-    try {
-      const d = new Date(S.meta.date+'T12:00:00');
-      text += ' — ' + d.toLocaleDateString('de-DE',{day:'numeric',month:'long',year:'numeric'});
-    } catch(e){}
+    try { text += ' — ' + new Date(S.meta.date+'T12:00:00').toLocaleDateString('de-DE',{day:'numeric',month:'long',year:'numeric'}); } catch(e){}
   }
+  text += ` — Code: ${TID}`;
   el.textContent = text;
 }
 
