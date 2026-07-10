@@ -2997,16 +2997,47 @@ function startFromEditor(){
 
 // Verteilt eine Liste von Spielen auf N parallele Felder, beginnend bei startTime,
 // mit fester Dauer pro Spiel (matchDuration in Minuten). Setzt m.time und m.field.
+// Plant eine geordnete Match-Liste auf Zeitslots und Felder. KERNREGEL: Kein Team
+// darf zwei Spiele im selben Zeitslot haben. Die Funktion verteilt Spiele gierig
+// (greedy) auf verfügbare Felder und schiebt ein Spiel in den nächsten Slot, wenn
+// ein beteiligtes Team im aktuellen Slot schon eingeplant ist.
 function scheduleMatchList(matches, startTime, matchDuration, numFields){
+  if(!matches.length) return;
   const [sh,sm] = startTime.split(':').map(Number);
-  let startMinutes = sh*60+sm;
-  matches.forEach((m, idx) => {
-    const slot = Math.floor(idx / numFields);      // Zeit-Slot (Runde)
-    const field = (idx % numFields) + 1;            // Feld-Nummer 1..N
-    const t = startMinutes + slot*matchDuration;
-    const hh = Math.floor(t/60)%24, mm = t%60;
-    m.time = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
-    m.field = field;
+  const startMin = sh*60+sm;
+  const toHHMM = (m) => { const hh=Math.floor(m/60)%24, mm=m%60; return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
+
+  // Slots: Jeder Slot hat N Felder und eine Menge von Teams, die bereits belegt sind.
+  const slots = []; // [{time, fields:[], teamsInSlot:Set}]
+  const getOrCreateSlot = (si) => {
+    while(slots.length <= si) slots.push({ time: toHHMM(startMin + slots.length*matchDuration), fields: new Array(numFields).fill(null), teamsInSlot: new Set() });
+    return slots[si];
+  };
+
+  matches.forEach(m => {
+    if(m.isFrei){ m.time=''; m.field=''; return; }
+    // Finde den frühesten Slot, in dem:
+    // (a) mindestens ein Feld frei ist UND
+    // (b) keines der beiden Teams schon eingeplant ist.
+    let placed = false;
+    for(let si=0; !placed; si++){
+      const slot = getOrCreateSlot(si);
+      const homeTeam = m.home, awayTeam = m.away;
+      // Team-Konflikt prüfen
+      if(slot.teamsInSlot.has(homeTeam) || slot.teamsInSlot.has(awayTeam)) continue;
+      // Freies Feld suchen
+      for(let fi=0; fi<numFields; fi++){
+        if(slot.fields[fi] === null){
+          slot.fields[fi] = m;
+          slot.teamsInSlot.add(homeTeam);
+          slot.teamsInSlot.add(awayTeam);
+          m.time = slot.time;
+          m.field = fi+1;
+          placed = true;
+          break;
+        }
+      }
+    }
   });
 }
 
