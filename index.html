@@ -3009,46 +3009,99 @@ function scheduleMatchList(matches, startTime, matchDuration, numFields){
   const startMin = sh*60+sm;
   const toHHMM = (m) => { const hh=Math.floor(m/60)%24, mm=m%60; return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`; };
 
-  const teamLastSlot = {}; // teamName → letzter Slot-Index
-  const unplaced = matches.filter(m=>!m.isFrei); // Spiele, die noch platziert werden müssen
-  matches.filter(m=>m.isFrei).forEach(m=>{ m.time=''; m.field=''; }); // Freilose überspringen
-  const placed = new Set();
+  const freiMatches = matches.filter(m=>m.isFrei);
+  const workMatches = matches.filter(m=>!m.isFrei);
+  freiMatches.forEach(m=>{ m.time=''; m.field=''; });
+  if(!workMatches.length) return;
 
-  let si = 0;
-  const slotTeams = []; // slotTeams[si] = Set of teams playing in slot si
-  while(placed.size < unplaced.length){
-    const time = toHHMM(startMin + si * matchDuration);
-    if(!slotTeams[si]) slotTeams[si] = new Set();
-    for(let fi=0; fi<numFields && placed.size<unplaced.length; fi++){
-      // Finde das beste passende Spiel für dieses Feld in diesem Slot
-      let bestIdx = -1;
-      for(let i=0; i<unplaced.length; i++){
-        const m = unplaced[i];
-        if(placed.has(m.id)) continue;
-        const h = m.home, a = m.away;
-        // Regel 1: Team nicht schon im selben Slot
-        if(slotTeams[si].has(h) || slotTeams[si].has(a)) continue;
-        // Regel 2: Mindestens 1 Slot Pause
-        const hLast = teamLastSlot[h] ?? -99;
-        const aLast = teamLastSlot[a] ?? -99;
-        if(si - hLast < 2 || si - aLast < 2) continue;
-        bestIdx = i;
-        break;
-      }
-      if(bestIdx < 0) continue;
-      const m = unplaced[bestIdx];
-      m.time = time;
-      m.field = fi + 1;
-      teamLastSlot[m.home] = si;
-      teamLastSlot[m.away] = si;
-      slotTeams[si].add(m.home);
-      slotTeams[si].add(m.away);
-      placed.add(m.id);
+  // Fisher-Yates Shuffle (deterministisch mit eigenem LCG-PRNG für Reproduzierbarkeit)
+  function shuffle(arr, seed){
+    let s = seed >>> 0;
+    const a = arr.slice();
+    const lcg = () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
+    for(let i=a.length-1; i>0; i--){
+      const j = Math.floor(lcg()*(i+1));
+      [a[i],a[j]] = [a[j],a[i]];
     }
-    si++;
-    // Sicherheit: Endlosschleife verhindern (maximal 500 Slots ≈ 125 Stunden)
-    if(si > 500) break;
+    return a;
   }
+
+  // Einen Greedy-Durchlauf mit gegebener Spielreihenfolge
+  function runTrial(order){
+    const teamLast = {};
+    const placedIds = new Set();
+    const assignments = []; // {id, slot, field}
+    const sc = (m, si) =>
+      (si - (teamLast[m.home] ?? -99)) + (si - (teamLast[m.away] ?? -99));
+
+    let si = 0;
+    while(placedIds.size < order.length){
+      const valid = order.filter(m =>
+        !placedIds.has(m.id) &&
+        (si - (teamLast[m.home] ?? -99)) >= 2 &&
+        (si - (teamLast[m.away] ?? -99)) >= 2
+      );
+
+      if(!valid.length){ si++; if(si>500) break; continue; }
+      valid.sort((a,b) => sc(b,si) - sc(a,si));
+      const topN = Math.min(valid.length, 20);
+
+      let assigned = [];
+      if(numFields >= 2){
+        let bestPair = null, bestSc = -1;
+        for(let i=0; i<topN; i++){
+          const m1 = valid[i];
+          for(let j=i+1; j<topN; j++){
+            const m2 = valid[j];
+            if(m2.home===m1.home||m2.home===m1.away||m2.away===m1.home||m2.away===m1.away) continue;
+            const ps = sc(m1,si)+sc(m2,si);
+            if(ps > bestSc){ bestSc=ps; bestPair=[m1,m2]; }
+            break; // erste kompatible Paarung reicht (Liste ist sortiert)
+          }
+        }
+        if(bestPair) assigned = bestPair;
+      }
+      if(!assigned.length) assigned = [valid[0]];
+
+      for(let fi=0; fi<assigned.length; fi++){
+        const m = assigned[fi];
+        teamLast[m.home] = si; teamLast[m.away] = si;
+        placedIds.add(m.id);
+        assignments.push({id:m.id, slot:si, field:fi+1});
+      }
+      si++;
+      if(si>500) break;
+    }
+
+    // Lücken zählen (Slots mit weniger als numFields Spielen)
+    const slotCounts = {};
+    assignments.forEach(a=>{ slotCounts[a.slot] = (slotCounts[a.slot]||0)+1; });
+    const gaps = Object.values(slotCounts).filter(c=>c<numFields).length;
+    return { assignments, gaps, totalSlots: si };
+  }
+
+  // Multi-Start: bis zu 150 Versuche, besten Plan auswählen
+  let bestResult = null;
+  const MAX_TRIES = 150;
+  for(let t=0; t<MAX_TRIES; t++){
+    const order = t===0 ? workMatches : shuffle(workMatches, t*2654435761);
+    const trial = runTrial(order);
+    if(!bestResult || trial.gaps < bestResult.gaps ||
+       (trial.gaps === bestResult.gaps && trial.totalSlots < bestResult.totalSlots)){
+      bestResult = trial;
+    }
+    if(bestResult.gaps === 0) break; // Perfekter Plan gefunden
+  }
+
+  // Bestes Ergebnis auf die echten Match-Objekte anwenden
+  const idToMatch = {};
+  workMatches.forEach(m=>{ idToMatch[m.id] = m; });
+  bestResult.assignments.forEach(a=>{
+    const m = idToMatch[a.id];
+    m.time  = toHHMM(startMin + a.slot * matchDuration);
+    m.field = a.field;
+  });
+}
 }
 
 // Plant ALLE KO-Spiele (reguläre Runden + Platzierungsspiele) konfliktfrei auf die
