@@ -3009,164 +3009,83 @@ function scheduleMatchList(matches, startTime, matchDuration, numFields){
   const startMin = sh*60+sm;
   const toHHMM = (m) => {
     const hh=Math.floor(m/60)%24, mm=m%60;
-    return String(hh).padStart(2,'0')+':'+String(mm).padStart(2,'0');
+    return `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
   };
 
-  const frei = matches.filter(m=>m.isFrei);
-  frei.forEach(m=>{ m.time=''; m.field=''; });
+  // Freilose überspringen
+  matches.filter(m=>m.isFrei).forEach(m=>{ m.time=''; m.field=''; });
   const unplaced = matches.filter(m=>!m.isFrei);
   if(!unplaced.length) return;
 
-  // Hilfsfunktion: versuche einen Plan mit gegebener Spielreihenfolge
+  // ── Helferfunktion: einen Durchlauf mit gegebener Reihenfolge versuchen ──
   function tryOrder(order){
-    const lastSlot = {};
-    const result = new Array(order.length);
+    const teamLastSlot = {};
+    const placed = new Map(); // id → {time, field}
     let si = 0;
-    let remaining = order.slice();
-    while(remaining.length > 0){
-      if(si > 500) return null; // Sicherheit
+    const remaining = [...order];
+
+    while(remaining.some(m=>!placed.has(m.id))){
       const slotTeams = new Set();
-      const placed = [];
-      for(let fi = 0; fi < numFields && remaining.length > 0; fi++){
-        let bestIdx = -1;
-        let bestWait = -1;
-        for(let i = 0; i < remaining.length; i++){
+      for(let fi=0; fi<numFields; fi++){
+        // Suche bestes Spiel für Feld fi in Slot si
+        let bestIdx = -1, bestScore = -Infinity;
+        for(let i=0; i<remaining.length; i++){
           const m = remaining[i];
-          const h = m.home, a = m.away;
-          if(slotTeams.has(h) || slotTeams.has(a)) continue;
-          const hLast = lastSlot[h] ?? -99;
-          const aLast = lastSlot[a] ?? -99;
-          if(si - hLast < 2 || si - aLast < 2) continue;
+          if(placed.has(m.id)) continue;
+          const h=m.home, a=m.away;
+          if(slotTeams.has(h)||slotTeams.has(a)) continue;
+          const hLast = teamLastSlot[h]??-99;
+          const aLast = teamLastSlot[a]??-99;
+          if(si-hLast<2||si-aLast<2) continue;
           // Score: bevorzuge Teams mit längster Wartezeit
-          const wait = (si - hLast) + (si - aLast);
-          if(wait > bestWait){ bestWait = wait; bestIdx = i; }
+          const score = (si-hLast)+(si-aLast);
+          if(score>bestScore){ bestScore=score; bestIdx=i; }
         }
-        if(bestIdx < 0) continue;
+        if(bestIdx<0) continue;
         const m = remaining[bestIdx];
         const time = toHHMM(startMin + si * matchDuration);
-        result[unplaced.indexOf(m)] = {id: m.id, time, field: fi+1};
-        lastSlot[m.home] = si;
-        lastSlot[m.away] = si;
+        placed.set(m.id, {time, field: fi+1});
+        teamLastSlot[m.home]=si;
+        teamLastSlot[m.away]=si;
         slotTeams.add(m.home);
         slotTeams.add(m.away);
-        placed.push(bestIdx);
       }
-      // entferne platzierte (in umgekehrter Reihenfolge)
-      placed.sort((a,b)=>b-a).forEach(i=>remaining.splice(i,1));
-      // Prüfe ob in diesem Slot gar nichts platziert wurde (echter Lückenslot)
-      if(placed.length === 0) si++; // Slot überspringen
-      else si++;
+      si++;
+      if(si>500) break;
     }
-    // Zähle Lücken: Slots ohne voll belegte Felder
-    // Einfach: Gesamtslots - benötigte Slots
-    const maxSlot = Math.max(...result.map(r=>parseInt(r.time.replace(':',''))));
-    return result;
+    return placed;
   }
 
-  // Optimierter Ansatz: shuffled Versuche, nehme besten (wenigste Slots)
-  function shuffle(arr){
-    const a = arr.slice();
-    for(let i=a.length-1;i>0;i--){
+  // ── Multi-Start: 5000 Versuche, bestes (wenigste unplatzierte) Ergebnis ──
+  let bestPlaced = null;
+  let bestCount = -1;
+
+  // Erster Versuch: Original-Reihenfolge
+  const orders = [unplaced];
+  for(let t=0;t<4999;t++){
+    const shuffled = [...unplaced];
+    for(let i=shuffled.length-1;i>0;i--){
       const j=Math.floor(Math.random()*(i+1));
-      [a[i],a[j]]=[a[j],a[i]];
+      [shuffled[i],shuffled[j]]=[shuffled[j],shuffled[i]];
     }
-    return a;
+    orders.push(shuffled);
   }
 
-  // Berechne Slot-Index aus toHHMM
-  function slotOf(timeStr){
-    const [h,m]=timeStr.split(':').map(Number);
-    return Math.round((h*60+m - startMin)/matchDuration);
-  }
-
-  function countGaps(assignments){
-    // Baue Slot→Felder-Map
-    const slotFields = {};
-    assignments.forEach(r=>{
-      const s = slotOf(r.time);
-      if(!slotFields[s]) slotFields[s]=0;
-      slotFields[s]++;
-    });
-    const slots = Object.keys(slotFields).map(Number).sort((a,b)=>a-b);
-    if(!slots.length) return 0;
-    let gaps = 0;
-    for(let s=slots[0]; s<=slots[slots.length-1]; s++){
-      const filled = slotFields[s]||0;
-      const needed = Math.min(numFields, unplaced.length);
-      if(filled < Math.min(numFields, 1)) gaps++;
-    }
-    return gaps;
-  }
-
-  let bestResult = null;
-  let bestGaps = Infinity;
-  const MAX_TRIES = 10000;
-
-  for(let t=0; t<MAX_TRIES; t++){
-    // Fisher-Yates shuffle in-place
-    const order = unplaced.slice();
-    for(let i=order.length-1;i>0;i--){
-      const j=Math.floor(Math.random()*(i+1));
-      const tmp=order[i];order[i]=order[j];order[j]=tmp;
-    }
-    // Greedy mit dieser Reihenfolge
-    const lastSlot2 = {};
-    const slotArr = [];
-    let rem = order.slice();
-    let si2 = 0;
-    let ok = true;
-    while(rem.length > 0){
-      if(si2 > 500){ ok=false; break; }
-      const slotTeams2 = new Set();
-      const placed2 = [];
-      for(let fi=0; fi<numFields && rem.length>0; fi++){
-        let bIdx=-1, bWait=-1;
-        for(let i=0;i<rem.length;i++){
-          const m=rem[i];
-          if(slotTeams2.has(m.home)||slotTeams2.has(m.away)) continue;
-          const hL=lastSlot2[m.home]??-99;
-          const aL=lastSlot2[m.away]??-99;
-          if(si2-hL<2||si2-aL<2) continue;
-          const w=(si2-hL)+(si2-aL);
-          if(w>bWait){bWait=w;bIdx=i;}
-        }
-        if(bIdx<0) continue;
-        const m=rem[bIdx];
-        const tStr=toHHMM(startMin+si2*matchDuration);
-        slotArr.push({m, time:tStr, field:fi+1, slot:si2});
-        lastSlot2[m.home]=si2; lastSlot2[m.away]=si2;
-        slotTeams2.add(m.home); slotTeams2.add(m.away);
-        placed2.push(bIdx);
-      }
-      placed2.sort((a,b)=>b-a).forEach(i=>rem.splice(i,1));
-      si2++;
-    }
-    if(!ok) continue;
-    // Berechne Lücken
-    const slotCounts={};
-    slotArr.forEach(x=>{ slotCounts[x.slot]=(slotCounts[x.slot]||0)+1; });
-    const usedSlots=Object.keys(slotCounts).map(Number).sort((a,b)=>a-b);
-    let gaps=0;
-    for(let s=usedSlots[0];s<=usedSlots[usedSlots.length-1];s++){
-      if(!(slotCounts[s]>0)) gaps++;
-    }
-    if(gaps < bestGaps){
-      bestGaps = gaps;
-      bestResult = slotArr.slice();
-      if(gaps===0) break; // Perfekt!
+  for(const order of orders){
+    const placed = tryOrder(order);
+    if(placed.size>bestCount){
+      bestCount=placed.size;
+      bestPlaced=placed;
+      if(bestCount===unplaced.length) break; // Lückenlos → sofort fertig
     }
   }
 
-  // Ergebnis anwenden
-  if(bestResult){
-    bestResult.forEach(x=>{
-      x.m.time = x.time;
-      x.m.field = x.field;
-    });
-    // Nicht platzierte sicherheitshalber auf ''
-    const placed = new Set(bestResult.map(x=>x.m.id));
-    unplaced.filter(m=>!placed.has(m.id)).forEach(m=>{m.time='';m.field='';});
-  }
+  // ── Ergebnis auf matches anwenden ──
+  unplaced.forEach(m=>{
+    const r = bestPlaced.get(m.id);
+    if(r){ m.time=r.time; m.field=r.field; }
+    else { m.time=''; m.field=''; }
+  });
 }
 
 // Plant ALLE KO-Spiele (reguläre Runden + Platzierungsspiele) konfliktfrei auf die
@@ -3529,25 +3448,19 @@ function buildKO(){
 }
 
 // Berechnet die Uhrzeit, zu der das letzte Spiel einer Liste (verteilt auf numFields) endet.
-function latestMatchEnd(matches, matchDuration, numFields, startTime){
-  if(!matches.length) return startTime;
-  // Echte Endzeit aus den tatsächlich vergebenen Spielzeiten berechnen
-  let latestMin = 0;
-  const [sh,sm] = startTime.split(':').map(Number);
-  const startMinutes = sh*60+sm;
-  matches.forEach(m=>{
-    if(!m.time) return;
-    const [hh,mm] = m.time.split(':').map(Number);
-    const end = hh*60+mm+matchDuration;
-    if(end > latestMin) latestMin = end;
-  });
-  if(latestMin===0){
-    // Fallback: alte Formel
-    const lastSlot = Math.floor((matches.length-1)/numFields);
-    latestMin = startMinutes + (lastSlot+1)*matchDuration;
+function latestMatchEnd(groupMatches, sched){
+  // Liest die tatsächlich zugewiesenen Spielzeiten aus
+  const allM = (groupMatches||[]).flat().filter(m=>m.time && !m.isFrei);
+  if(!allM.length){
+    // Fallback: Schätzung
+    const n = (groupMatches||[]).flat().filter(m=>!m.isFrei).length;
+    const [sh,sm] = (sched.firstTime||'10:00').split(':').map(Number);
+    const slots = Math.ceil(n / Math.max(1,sched.fieldsGroup|0));
+    return (sh*60+sm) + slots*(sched.matchDuration||15);
   }
-  const hh=Math.floor(latestMin/60)%24, mm2=latestMin%60;
-  return String(hh).padStart(2,'0')+':'+String(mm2).padStart(2,'0');
+  const toMin = t=>{ const [h,m]=String(t).split(':').map(Number); return h*60+m; };
+  return Math.max(...allM.map(m=>toMin(m.time))) + (sched.matchDuration||15);
+}:${String(mm).padStart(2,'0')}`;
 }
 function mkBracket(q){
   const real=[...q];
@@ -3839,7 +3752,7 @@ function renderGrp(){
   let grpHtml = S.groups.map((g,gi)=>`
     <div class="card">${tblHTML(g.teams,S.groupMatches[gi]||[],g.name)}
       <div style="margin-top:16px;font-size:12px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:1px;margin-bottom:8px;">Spiele</div>
-      ${(S.groupMatches[gi]||[]).slice().sort((a,b)=>{const ta=a.time||'99:99',tb=b.time||'99:99';return ta<tb?-1:ta>tb?1:0;}).map(m=>mcHTML(m,'saveGM',true)).join('')}
+      ${(S.groupMatches[gi]||[]).slice().sort((a,b)=>{const t=s=>{if(!s)return 9999;const[h,mm]=s.split(':').map(Number);return h*60+mm;};return t(a.time)-t(b.time);}).map(m=>mcHTML(m,'saveGM',true)).join('')}
     </div>`).join('');
   // Im Liga-Modus: Platzierungsspiele unter der Tabelle. Vor Abschluss der Liga als
   // Vorschau mit Platzhaltern ("1. der Tabelle"), danach mit echten Teams.
@@ -4344,61 +4257,52 @@ function renderTree(){
 
 
 function renderSch(){
-  renderTree();
-  const lbl = document.getElementById('sch-editable-lbl');
-  if(!allTeams().length||S.phase==='setup'||S.phase==='editing'){
-    document.getElementById('sch-content').innerHTML='';
-    lbl.style.display='none';
-    return;
-  }
-  lbl.style.display='block';
-  let h='';
+  const el = document.getElementById('tab-schedule');
+  if(!el) return;
+  if(!S.schedule){ el.innerHTML='<p class="empty">Kein Spielplan erstellt.</p>'; return; }
 
-  // Alle Spiele sammeln (Gruppe + KO + Platzierung), nach Zeit sortieren
-  const allMatches = [];
-  S.groups.forEach((g,gi)=>{
-    (S.groupMatches[gi]||[]).forEach(m=>{
-      if(!m.isFrei) allMatches.push({m, fn:'saveGM', cat:'Gruppe '+g.name, editable:true});
-    });
+  // Alle Spiele sammeln
+  const toMin = t=>{ if(!t) return 9999; const [h,m]=String(t).split(':').map(Number); return h*60+m; };
+  let allMatches = [];
+
+  // Gruppenspiele
+  (S.groupMatches||[]).forEach((gm,gi)=>{
+    const gname = S.groups[gi]?.name||('Gruppe '+(gi+1));
+    gm.filter(m=>m.time&&!m.isFrei).forEach(m=>allMatches.push({...m, _label:'Gruppe '+gname, _sort:toMin(m.time)}));
   });
-  S.koRounds.forEach(r=>{
-    r.matches.filter(m=>!m.isFrei).forEach(m=>{
-      allMatches.push({m, fn:'saveKO', cat:r.name, editable:true});
-    });
+
+  // KO-Spiele
+  (S.koRounds||[]).forEach(r=>{
+    r.matches.filter(m=>m.time&&!m.isFrei).forEach(m=>allMatches.push({...m, _label:r.name, _sort:toMin(m.time)}));
   });
-  if(S.placementGames){
-    S.placementGames.forEach(m=>{
-      if(!m.isFrei) allMatches.push({m, fn:'saveKO', cat:(m.roundName||'Platzierung'), editable:true});
-    });
-  }
+
+  // Platzierungsspiele (inkl. Finale)
+  (S.placementGames||[]).forEach(pg=>{
+    (pg.matches||[]).filter(m=>m.time&&!m.isFrei).forEach(m=>allMatches.push({...m, _label:pg.label||'Platzierung', _sort:toMin(m.time)}));
+  });
 
   // Chronologisch sortieren
-  allMatches.sort((a,b)=>{
-    const ta = a.m.time||'99:99', tb = b.m.time||'99:99';
-    if(ta!==tb) return ta<tb?-1:1;
-    return (a.m.field||0)-(b.m.field||0);
-  });
+  allMatches.sort((a,b)=>a._sort-b._sort || (a.field||0)-(b.field||0));
 
-  if(activeTeam){
-    const mine = allMatches.filter(x=>x.m.home===activeTeam||x.m.away===activeTeam);
-    h+=`<div style="background:var(--blue);color:#fff;border-radius:8px;padding:10px 14px;margin-bottom:12px;font-weight:600;">👤 Deine Spiele – ${esc(activeTeam)}</div>`;
-    if(mine.length) mine.forEach(x=>h+=mcHTML(x.m,x.fn,false));
-    else h+='<div class="card"><p style="color:var(--muted);">Keine Spiele gefunden.</p></div>';
-    h+='<div class="sub-lbl" style="margin-top:20px;border-left-color:var(--border);color:var(--muted);">Alle anderen Spiele</div>';
-  }
+  if(!allMatches.length){ el.innerHTML='<p class="empty">Keine Spiele geplant.</p>'; return; }
 
-  let lastCat = null;
-  allMatches.forEach(x=>{
-    if(activeTeam && (x.m.home===activeTeam||x.m.away===activeTeam)) return;
-    if(x.cat !== lastCat){
-      h+=`<div class="sub-lbl">${esc(x.cat)}</div>`;
-      lastCat = x.cat;
+  let html2='', lastLabel='';
+  allMatches.forEach(m=>{
+    if(m._label!==lastLabel){
+      html2+=`<div class="sch-section-head">${m._label}</div>`;
+      lastLabel=m._label;
     }
-    h+=mcHTML(x.m, x.fn, false);
+    const hName = teamDisplayName(m.home);
+    const aName = teamDisplayName(m.away);
+    const res = (m.h!==''&&m.a!=='')?`${m.h}:${m.a}`:'–:–';
+    html2+=`<div class="sch-row">
+      <span class="sch-time">${m.time||''}</span>
+      <span class="sch-field">F${m.field||'?'}</span>
+      <span class="sch-match">${hName} – ${aName}</span>
+      <span class="sch-res">${res}</span>
+    </div>`;
   });
-
-  document.getElementById('sch-content').innerHTML=h;
-  setTimeout(initEventDropdowns,0);
+  el.innerHTML=html2;
 }
 
 function renderStats(){ renderStatsView(); }
