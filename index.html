@@ -4436,6 +4436,22 @@ function renderAdm(){
       finishBtn.disabled = true;
       finishBtn.style.opacity = '0.5';
       finishBtn.style.cursor = 'not-allowed';
+    } else if(S.leagueMode){
+      // Liga-Modus: Abschluss möglich sobald alle Ligaspiele gespielt sind
+      const allGM = Object.values(S.groupMatches).flat().filter(m=>!m.isFrei);
+      const allDone = allGM.length > 0 && allGM.every(m => m.h!=='' && m.a!=='' && m.locked);
+      if(allDone){
+        archiveStatus.innerHTML = '<span style="color:var(--green);">✓ Alle Ligaspiele gespielt. Bereit zum Abschließen.</span>';
+        finishBtn.disabled = false;
+        finishBtn.style.opacity = '1';
+        finishBtn.style.cursor = 'pointer';
+      } else {
+        const played = allGM.filter(m=>m.h!==''&&m.a!==''&&m.locked).length;
+        archiveStatus.innerHTML = '<span style="color:var(--muted);">Noch ' + (allGM.length-played) + ' von ' + allGM.length + ' Ligaspielen offen.</span>';
+        finishBtn.disabled = true;
+        finishBtn.style.opacity = '0.5';
+        finishBtn.style.cursor = 'not-allowed';
+      }
     } else if(S.phase !== 'ko'){
       archiveStatus.innerHTML = '<span style="color:var(--muted);">Erst nach Ende der KO-Runde möglich (aktuell: Phase „' + esc(S.phase) + '").</span>';
       finishBtn.disabled = true;
