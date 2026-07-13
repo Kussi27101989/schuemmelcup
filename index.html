@@ -845,8 +845,9 @@ function buildArchiveRecord(){
 
   // Endplatzierung
   const finalRank = [];
+  const isLeagueArchive = S.leagueMode || (S.groups.length===1 && (!S.koRounds || !S.koRounds.length));
 
-  if(S.leagueMode){
+  if(isLeagueArchive){
     // Liga-Modus: Platzierung ergibt sich aus der Abschlusstabelle.
     // Liga-Platzierungsspiele (falls gespielt) überschreiben die betroffenen Plätze.
     const table = standings(S.groups[0].teams, S.groupMatches[0]||[], S.tiebreaker);
@@ -896,15 +897,17 @@ async function finishTournament(){
   if(!TID){ alert('Kein Turnier geladen.'); return; }
   if(S.phase === 'done'){ alert('Dieses Turnier ist bereits abgeschlossen.'); return; }
 
-  // Liga-Modus: alle Ligaspiele müssen gespielt sein
-  if(S.leagueMode){
+  // Liga-Modus erkennen: explizites Flag ODER strukturell (1 Gruppe, keine KO-Runden)
+  const isLeague = S.leagueMode || (S.groups.length===1 && (!S.koRounds || !S.koRounds.length));
+
+  if(isLeague){
     const allGM = Object.values(S.groupMatches).flat().filter(m=>!m.isFrei);
-    const allDone = allGM.every(m => m.h!=='' && m.a!=='' && m.locked);
+    const allDone = allGM.every(m => m.h!=='' && m.a!=='');
     if(!allDone){
-      alert('⚠ Es sind noch nicht alle Ligaspiele gespielt und gesperrt. Bitte zuerst alle Ergebnisse eintragen.');
+      alert('⚠ Es sind noch nicht alle Spiele gespielt. Bitte zuerst alle Ergebnisse eintragen.');
       return;
     }
-    if(!confirm(`Liga "${S.meta?.name || TID}" abschließen?\n\n• Endstand wird in die Ewige Bestenliste übernommen\n• Turnier kann danach nicht mehr bearbeitet werden`)) return;
+    if(!confirm(`"${S.meta?.name || TID}" abschließen?\n\n• Endstand wird in die Ewige Bestenliste übernommen\n• Turnier kann danach nicht mehr bearbeitet werden`)) return;
   } else {
     // KO-Modus: Finale prüfen
     const koRounds = S.koRounds || [];
@@ -4436,18 +4439,18 @@ function renderAdm(){
       finishBtn.disabled = true;
       finishBtn.style.opacity = '0.5';
       finishBtn.style.cursor = 'not-allowed';
-    } else if(S.leagueMode){
-      // Liga-Modus: Abschluss möglich sobald alle Ligaspiele gespielt sind
+    } else if(S.leagueMode || (S.groups.length===1 && (!S.koRounds || !S.koRounds.length))){
+      // Liga-Modus (oder 1-Gruppen-Turnier ohne KO): Abschluss sobald alle Spiele gespielt
       const allGM = Object.values(S.groupMatches).flat().filter(m=>!m.isFrei);
-      const allDone = allGM.length > 0 && allGM.every(m => m.h!=='' && m.a!=='' && m.locked);
+      const played = allGM.filter(m=>m.h!==''&&m.a!=='').length;
+      const allDone = allGM.length > 0 && played === allGM.length;
       if(allDone){
-        archiveStatus.innerHTML = '<span style="color:var(--green);">✓ Alle Ligaspiele gespielt. Bereit zum Abschließen.</span>';
+        archiveStatus.innerHTML = '<span style="color:var(--green);">✓ Alle ' + allGM.length + ' Spiele gespielt. Bereit zum Abschließen.</span>';
         finishBtn.disabled = false;
         finishBtn.style.opacity = '1';
         finishBtn.style.cursor = 'pointer';
       } else {
-        const played = allGM.filter(m=>m.h!==''&&m.a!==''&&m.locked).length;
-        archiveStatus.innerHTML = '<span style="color:var(--muted);">Noch ' + (allGM.length-played) + ' von ' + allGM.length + ' Ligaspielen offen.</span>';
+        archiveStatus.innerHTML = '<span style="color:var(--muted);">Noch ' + (allGM.length-played) + ' von ' + allGM.length + ' Spielen offen.</span>';
         finishBtn.disabled = true;
         finishBtn.style.opacity = '0.5';
         finishBtn.style.cursor = 'not-allowed';
