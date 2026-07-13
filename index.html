@@ -843,21 +843,48 @@ function buildArchiveRecord(){
   record.cards = teamCards;
   record.stats = { games:gameCount, goals:goalCount };
 
-  // Endplatzierung: Finale + Spiel um Platz 3 auswerten, ergänzt um KO-Ausscheider
-  const koRounds = S.koRounds || [];
-  const finalMatch = koRounds.length ? koRounds[koRounds.length-1].matches.find(m=>!m.isFrei) : null;
-  const platz3Game = (S.placementGames||[]).find(pg => pg.key==='platz3');
+  // Endplatzierung
   const finalRank = [];
-  if(finalMatch && finalMatch.winner){
-    finalRank.push({ rank:1, team:finalMatch.winner, canon:canonTeamName(finalMatch.winner) });
-    const runnerUp = finalMatch.winner===finalMatch.home ? finalMatch.away : finalMatch.home;
-    finalRank.push({ rank:2, team:runnerUp, canon:canonTeamName(runnerUp) });
-  }
-  if(platz3Game && platz3Game.matches[0]?.winner){
-    const p3 = platz3Game.matches[0];
-    finalRank.push({ rank:3, team:p3.winner, canon:canonTeamName(p3.winner) });
-    const fourth = p3.winner===p3.home ? p3.away : p3.home;
-    finalRank.push({ rank:4, team:fourth, canon:canonTeamName(fourth) });
+
+  if(S.leagueMode){
+    // Liga-Modus: Platzierung ergibt sich aus der Abschlusstabelle.
+    // Liga-Platzierungsspiele (falls gespielt) überschreiben die betroffenen Plätze.
+    const table = standings(S.groups[0].teams, S.groupMatches[0]||[], S.tiebreaker);
+    table.forEach((row, i) => {
+      finalRank.push({ rank:i+1, team:row.team, canon:canonTeamName(row.team) });
+    });
+
+    // Liga-Platzierungsspiele auswerten: Wenn z.B. das "Finale" (1. vs 2.) gespielt wurde,
+    // bestimmt der Sieger Platz 1 und der Verlierer Platz 2 — unabhängig von der Tabelle.
+    (S.placementGames||[]).forEach(pg => {
+      const m = pg.matches[0];
+      if(!m || !m.winner) return;
+      const mm = String(pg.key).match(/^liga_(\d+)_(\d+)$/);
+      if(!mm) return;
+      const topRank = parseInt(mm[1]), lowerRank = parseInt(mm[2]);
+      const loser = m.winner === m.home ? m.away : m.home;
+      // Bestehende Einträge für diese Plätze überschreiben
+      const topEntry = finalRank.find(r=>r.rank===topRank);
+      const lowEntry = finalRank.find(r=>r.rank===lowerRank);
+      if(topEntry){ topEntry.team = m.winner; topEntry.canon = canonTeamName(m.winner); }
+      if(lowEntry){ lowEntry.team = loser; lowEntry.canon = canonTeamName(loser); }
+    });
+  } else {
+    // KO-Modus: Finale + Spiel um Platz 3 auswerten
+    const koRounds = S.koRounds || [];
+    const finalMatch = koRounds.length ? koRounds[koRounds.length-1].matches.find(m=>!m.isFrei) : null;
+    const platz3Game = (S.placementGames||[]).find(pg => pg.key==='platz3');
+    if(finalMatch && finalMatch.winner){
+      finalRank.push({ rank:1, team:finalMatch.winner, canon:canonTeamName(finalMatch.winner) });
+      const runnerUp = finalMatch.winner===finalMatch.home ? finalMatch.away : finalMatch.home;
+      finalRank.push({ rank:2, team:runnerUp, canon:canonTeamName(runnerUp) });
+    }
+    if(platz3Game && platz3Game.matches[0]?.winner){
+      const p3 = platz3Game.matches[0];
+      finalRank.push({ rank:3, team:p3.winner, canon:canonTeamName(p3.winner) });
+      const fourth = p3.winner===p3.home ? p3.away : p3.home;
+      finalRank.push({ rank:4, team:fourth, canon:canonTeamName(fourth) });
+    }
   }
   record.finalRanking = finalRank;
 
@@ -868,20 +895,31 @@ function buildArchiveRecord(){
 async function finishTournament(){
   if(!TID){ alert('Kein Turnier geladen.'); return; }
   if(S.phase === 'done'){ alert('Dieses Turnier ist bereits abgeschlossen.'); return; }
-  // Voraussetzung: Es MUSS mindestens ein Finale-Sieger existieren
-  const koRounds = S.koRounds || [];
-  const finalMatch = koRounds.length ? koRounds[koRounds.length-1].matches.find(m=>!m.isFrei) : null;
-  if(!finalMatch || !finalMatch.winner){
-    if(!confirm('⚠ Das Finale wurde noch nicht entschieden. Trotzdem abschließen? (Die Bestenliste wird ohne Endplatzierung eingetragen.)')) return;
+
+  // Liga-Modus: alle Ligaspiele müssen gespielt sein
+  if(S.leagueMode){
+    const allGM = Object.values(S.groupMatches).flat().filter(m=>!m.isFrei);
+    const allDone = allGM.every(m => m.h!=='' && m.a!=='' && m.locked);
+    if(!allDone){
+      alert('⚠ Es sind noch nicht alle Ligaspiele gespielt und gesperrt. Bitte zuerst alle Ergebnisse eintragen.');
+      return;
+    }
+    if(!confirm(`Liga "${S.meta?.name || TID}" abschließen?\n\n• Endstand wird in die Ewige Bestenliste übernommen\n• Turnier kann danach nicht mehr bearbeitet werden`)) return;
   } else {
-    if(!confirm(`Turnier "${S.meta?.name || TID}" abschließen?\n\n• Endstand wird in die Ewige Bestenliste übernommen\n• Turnier kann danach nicht mehr bearbeitet werden`)) return;
+    // KO-Modus: Finale prüfen
+    const koRounds = S.koRounds || [];
+    const finalMatch = koRounds.length ? koRounds[koRounds.length-1].matches.find(m=>!m.isFrei) : null;
+    if(!finalMatch || !finalMatch.winner){
+      if(!confirm('⚠ Das Finale wurde noch nicht entschieden. Trotzdem abschließen? (Die Bestenliste wird ohne Endplatzierung eingetragen.)')) return;
+    } else {
+      if(!confirm(`Turnier "${S.meta?.name || TID}" abschließen?\n\n• Endstand wird in die Ewige Bestenliste übernommen\n• Turnier kann danach nicht mehr bearbeitet werden`)) return;
+    }
   }
+
   createSnapshot(true); // Sicherheits-Snapshot vor Abschluss
   const record = buildArchiveRecord();
   try {
-    // Archiv-Eintrag mit Turnier-Code als Key — verhindert Duplikate bei erneutem Klick
     await fbdb.ref('archive/'+TID).set(record);
-    // Turnier-Phase auf 'done' setzen
     S.phase = 'done';
     save();
     alert('✓ Turnier erfolgreich abgeschlossen und archiviert.\n\nDie Ewige Bestenliste findest du im Menüpunkt „🏆 Bestenliste".');
